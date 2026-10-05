@@ -1,0 +1,16 @@
+{
+  "name": "Aedifica.Construction",
+  "rootNamespace": "Aedifica.Construction",
+  "references": [
+    "Aedifica.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

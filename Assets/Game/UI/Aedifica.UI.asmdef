@@ -1,0 +1,16 @@
+{
+  "name": "Aedifica.UI",
+  "rootNamespace": "Aedifica.UI",
+  "references": [
+    "Aedifica.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
