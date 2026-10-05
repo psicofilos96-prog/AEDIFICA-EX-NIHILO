@@ -1,0 +1,17 @@
+{
+  "name": "Aedifica.Interaction",
+  "rootNamespace": "Aedifica.Interaction",
+  "references": [
+    "Aedifica.Core",
+    "Unity.InputSystem"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,52 @@
+using Aedifica.Interaction.Camera;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace Aedifica.Tests.EditMode
+{
+    public sealed class CameraMotionTests
+    {
+        [Test]
+        public void PitchAndDistanceStayWithinConfiguredLimits()
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+            motion.Step(new CameraInput { RotatePixels = new Vector2(0f, -10000f), Scroll = 10000f }, 0.016f, settings);
+            Assert.That(motion.Pitch, Is.EqualTo(settings.pitchMax));
+            Assert.That(motion.Distance, Is.EqualTo(settings.zoomMinDistance));
+            motion.Step(new CameraInput { RotatePixels = new Vector2(0f, 10000f), Scroll = -10000f }, 0.016f, settings);
+            Assert.That(motion.Pitch, Is.EqualTo(settings.pitchMin));
+            Assert.That(motion.Distance, Is.EqualTo(settings.zoomMaxDistance));
+        }
+
+        [Test]
+        public void SpeedIncreasesWithDistance()
+        {
+            var settings = new CameraSettings();
+            settings.Normalize();
+            Assert.That(CameraMotion.MoveSpeed(settings.zoomMinDistance, settings), Is.EqualTo(settings.moveSpeedMin));
+            Assert.That(CameraMotion.MoveSpeed(settings.zoomMaxDistance, settings), Is.EqualTo(settings.moveSpeedMax));
+        }
+
+        [Test]
+        public void MovementIsHorizontalAndUsesYaw()
+        {
+            Vector3 direction = CameraMotion.HorizontalMove(Vector2.up, 90f);
+            Assert.That(direction.y, Is.EqualTo(0f));
+            Assert.That(direction.x, Is.EqualTo(1f).Within(0.0001f));
+        }
+
+        [Test]
+        public void InvalidSettingsAndInputRemainFinite()
+        {
+            var settings = new CameraSettings { zoomMinDistance = float.NaN, zoomMaxDistance = float.NegativeInfinity,
+                pitchMin = float.NaN, pitchMax = float.PositiveInfinity, moveSpeedMin = float.NaN,
+                moveSpeedMax = float.PositiveInfinity, smoothing = float.NaN };
+            var motion = new CameraMotion(Vector3.zero, float.NaN, float.NaN, float.NaN, settings);
+            motion.Step(new CameraInput { Scroll = float.NaN, Move = new Vector2(float.NaN, float.PositiveInfinity) }, 0.016f, settings);
+            Assert.That(float.IsNaN(motion.Position.x) || float.IsInfinity(motion.Position.x), Is.False);
+            Assert.That(motion.Distance, Is.GreaterThanOrEqualTo(settings.zoomMinDistance));
+            Assert.That(motion.Pitch, Is.InRange(settings.pitchMin, settings.pitchMax));
+        }
+    }
+}
