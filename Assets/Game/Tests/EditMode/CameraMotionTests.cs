@@ -20,6 +20,40 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
+        public void OneWheelStepMakesUsefulProgressWithoutOvershooting()
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+            motion.Step(new CameraInput { Scroll = 1f }, 0.016f, settings);
+            Assert.That(motion.Distance, Is.InRange(18f, 19f));
+            Assert.That(motion.Distance, Is.GreaterThan(settings.zoomMinDistance));
+        }
+
+        [Test]
+        public void RightDragRotatesWithoutPanning()
+        {
+            var input = new CameraInput();
+            CameraInputReader.AssignMouseDrag(ref input, true, true, new Vector2(50f, -20f));
+            Assert.That(input.RotatePixels, Is.EqualTo(new Vector2(50f, -20f)));
+            Assert.That(input.PanPixels, Is.EqualTo(Vector2.zero));
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+            motion.Step(input, 0.016f, settings);
+            Assert.That(motion.Yaw, Is.EqualTo(10f).Within(0.001f));
+            Assert.That(motion.Pitch, Is.EqualTo(49f).Within(0.001f));
+            Assert.That(motion.Focus, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
+        public void MiddleDragDoesNotRotate()
+        {
+            var input = new CameraInput();
+            CameraInputReader.AssignMouseDrag(ref input, false, true, new Vector2(50f, -20f));
+            Assert.That(input.RotatePixels, Is.EqualTo(Vector2.zero));
+            Assert.That(input.PanPixels, Is.EqualTo(new Vector2(50f, -20f)));
+        }
+
+        [Test]
         public void SpeedIncreasesWithDistance()
         {
             var settings = new CameraSettings();

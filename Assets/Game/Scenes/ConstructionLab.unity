@@ -272,7 +272,7 @@ MonoBehaviour:
   settings:
     moveSpeedMin: 3
     moveSpeedMax: 150
-    zoomSpeed: 0.12
+    zoomSpeed: 0.3
     zoomMinDistance: 2
     zoomMaxDistance: 400
     yawSpeed: 0.2

@@ -23,6 +23,13 @@ namespace Aedifica.Interaction.Camera
             ApplyTransform();
         }
 
+        private void OnDisable() => CameraInputReader.ReleaseRotationCapture();
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused) CameraInputReader.ReleaseRotationCapture();
+        }
+
         private void Update()
         {
             motion.Step(CameraInputReader.Read(), Time.unscaledDeltaTime, settings);

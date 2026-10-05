@@ -11,3 +11,5 @@ O zoom é multiplicativo e limitado, cobrindo diferentes escalas sem mudar FOV. 
 `CameraSettings` centraliza limites e sensibilidades, normaliza valores inválidos e impõe teto finito de 10000 para escalares positivos. A câmera não usa busca de objetos, raycast, alocação intencional, LINQ ou criação de GameObjects por frame. ConstructionLab contém apenas malha de piso e cubos de referência.
 
 Alternativas rejeitadas: Cinemachine, Legacy Input Manager, FOV como zoom, pivô GameObject obrigatório, física de mola e raycasts contínuos. Extensões futuras possíveis: foco por seleção, limites opcionais de mundo e prevenção de colisão com geometria; nenhuma foi implementada aqui.
+
+Correção após teste local: o arraste com botão direito captura o cursor enquanto estiver pressionado e restaura seu estado ao soltar, perder foco ou desativar a câmera. Isso mantém `Mouse.current.delta` disponível durante o arraste na Game View. A velocidade de zoom passou de 0,12 para 0,30 por passo normalizado de scroll (120 unidades do Input System); a distância continua multiplicativa e limitada. WASD, Q/E e pan não mudaram.

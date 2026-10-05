@@ -14,6 +14,10 @@ namespace Aedifica.Interaction.Camera
 
     public static class CameraInputReader
     {
+        private static bool ownsCursorLock;
+        private static CursorLockMode previousLockMode;
+        private static bool previousVisibility;
+
         public static CameraInput Read()
         {
             var input = new CameraInput();
@@ -27,12 +31,42 @@ namespace Aedifica.Interaction.Camera
             }
             if (mouse != null)
             {
+                bool rightPressed = mouse.rightButton.isPressed;
+                SetRotationCapture(rightPressed);
                 input.Scroll = mouse.scroll.ReadValue().y / 120f;
-                var delta = mouse.delta.ReadValue();
-                if (mouse.rightButton.isPressed) input.RotatePixels = delta;
-                else if (mouse.middleButton.isPressed) input.PanPixels = delta;
+                AssignMouseDrag(ref input, rightPressed, mouse.middleButton.isPressed, mouse.delta.ReadValue());
             }
+            else ReleaseRotationCapture();
             return input;
+        }
+
+        public static void AssignMouseDrag(ref CameraInput input, bool rightPressed, bool middlePressed, Vector2 delta)
+        {
+            if (rightPressed) input.RotatePixels = delta;
+            else if (middlePressed) input.PanPixels = delta;
+        }
+
+        private static void SetRotationCapture(bool rightPressed)
+        {
+            if (!rightPressed)
+            {
+                ReleaseRotationCapture();
+                return;
+            }
+            if (ownsCursorLock) return;
+            previousLockMode = Cursor.lockState;
+            previousVisibility = Cursor.visible;
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            ownsCursorLock = true;
+        }
+
+        public static void ReleaseRotationCapture()
+        {
+            if (!ownsCursorLock) return;
+            Cursor.lockState = previousLockMode;
+            Cursor.visible = previousVisibility;
+            ownsCursorLock = false;
         }
     }
 }

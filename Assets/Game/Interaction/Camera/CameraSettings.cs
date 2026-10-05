@@ -8,7 +8,7 @@ namespace Aedifica.Interaction.Camera
     {
         public float moveSpeedMin = 3f;
         public float moveSpeedMax = 150f;
-        public float zoomSpeed = 0.12f;
+        public float zoomSpeed = 0.30f;
         public float zoomMinDistance = 2f;
         public float zoomMaxDistance = 400f;
         public float yawSpeed = 0.2f;
@@ -23,7 +23,7 @@ namespace Aedifica.Interaction.Camera
         {
             moveSpeedMin = Positive(moveSpeedMin, 3f);
             moveSpeedMax = Mathf.Max(moveSpeedMin, Positive(moveSpeedMax, 150f));
-            zoomSpeed = Positive(zoomSpeed, 0.12f);
+            zoomSpeed = Positive(zoomSpeed, 0.30f);
             zoomMinDistance = Mathf.Max(0.5f, Positive(zoomMinDistance, 2f));
             zoomMaxDistance = Mathf.Max(zoomMinDistance, Positive(zoomMaxDistance, 400f));
             yawSpeed = Positive(yawSpeed, 0.2f);
