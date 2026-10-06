@@ -15,9 +15,12 @@ namespace Aedifica.Interaction.Camera
     public struct CameraInputDiagnostics
     {
         public bool RightPressed;
+        public bool LeftPressed;
         public bool MiddlePressed;
         public Vector2 MouseDelta;
         public float RawScrollY;
+        public float LastNonzeroRawScrollY;
+        public float LastNonzeroNormalizedScroll;
         public CameraInput Input;
     }
 
@@ -25,6 +28,8 @@ namespace Aedifica.Interaction.Camera
     {
         public static CameraInputDiagnostics LastDiagnostics { get; private set; }
 
+        private static float lastNonzeroRawScrollY;
+        private static float lastNonzeroNormalizedScroll;
         private static bool ownsCursorLock;
         private static CursorLockMode previousLockMode;
         private static bool previousVisibility;
@@ -44,23 +49,31 @@ namespace Aedifica.Interaction.Camera
             if (mouse != null)
             {
                 diagnostics.RightPressed = mouse.rightButton.isPressed;
+                diagnostics.LeftPressed = mouse.leftButton.isPressed;
                 diagnostics.MiddlePressed = mouse.middleButton.isPressed;
                 SetRotationCapture(diagnostics.RightPressed);
                 diagnostics.RawScrollY = mouse.scroll.ReadValue().y;
                 diagnostics.MouseDelta = mouse.delta.ReadValue();
                 input.Scroll = diagnostics.RawScrollY / 120f;
-                AssignMouseDrag(ref input, diagnostics.RightPressed, diagnostics.MiddlePressed, diagnostics.MouseDelta);
+                if (diagnostics.RawScrollY != 0f)
+                {
+                    lastNonzeroRawScrollY = diagnostics.RawScrollY;
+                    lastNonzeroNormalizedScroll = input.Scroll;
+                }
+                AssignMouseDrag(ref input, diagnostics.RightPressed, diagnostics.LeftPressed, diagnostics.MouseDelta);
             }
             else ReleaseRotationCapture();
+            diagnostics.LastNonzeroRawScrollY = lastNonzeroRawScrollY;
+            diagnostics.LastNonzeroNormalizedScroll = lastNonzeroNormalizedScroll;
             diagnostics.Input = input;
             LastDiagnostics = diagnostics;
             return input;
         }
 
-        public static void AssignMouseDrag(ref CameraInput input, bool rightPressed, bool middlePressed, Vector2 delta)
+        public static void AssignMouseDrag(ref CameraInput input, bool rightPressed, bool leftPressed, Vector2 delta)
         {
             if (rightPressed) input.RotatePixels = delta;
-            else if (middlePressed) input.PanPixels = delta;
+            else if (leftPressed) input.PanPixels = delta;
         }
 
         private static void SetRotationCapture(bool rightPressed)

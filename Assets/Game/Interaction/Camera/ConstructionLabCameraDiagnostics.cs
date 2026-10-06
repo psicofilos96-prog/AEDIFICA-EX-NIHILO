@@ -21,13 +21,14 @@ namespace Aedifica.Interaction.Camera
 
             var read = CameraInputReader.LastDiagnostics;
             var motion = controller.DiagnosticMotion;
-            GUILayout.BeginArea(new Rect(12f, 12f, 410f, 470f), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(12f, 12f, 440f, 500f), GUI.skin.box);
             GUILayout.Label("CAMERA DEBUG — TEMPORARY P0.1");
-            GUILayout.Label($"RMB: {(read.RightPressed ? "DOWN" : "UP")}   MMB: {(read.MiddlePressed ? "DOWN" : "UP")}");
+            GUILayout.Label($"LMB: {(read.LeftPressed ? "DOWN" : "UP")}   MMB: {(read.MiddlePressed ? "DOWN" : "UP")}   RMB: {(read.RightPressed ? "DOWN" : "UP")}");
             GUILayout.Label($"Mouse Delta: X {read.MouseDelta.x:F3}   Y {read.MouseDelta.y:F3}");
             GUILayout.Label($"RotatePixels: X {read.Input.RotatePixels.x:F3}   Y {read.Input.RotatePixels.y:F3}");
             GUILayout.Label($"PanPixels: X {read.Input.PanPixels.x:F3}   Y {read.Input.PanPixels.y:F3}");
             GUILayout.Label($"Raw Scroll Y: {read.RawScrollY:F4}   Normalized: {read.Input.Scroll:F4}");
+            GUILayout.Label($"Last nonzero scroll: raw {read.LastNonzeroRawScrollY:F4}   normalized {read.LastNonzeroNormalizedScroll:F4}");
             GUILayout.Label($"Zoom Speed (runtime): {controller.DiagnosticZoomSpeed:F3}");
             GUILayout.Label($"Distance: {motion.Distance:F3}   Target: {motion.TargetDistance:F3}");
             GUILayout.Label($"Yaw: {motion.Yaw:F3}   Target: {motion.TargetYaw:F3}");

@@ -45,12 +45,21 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
-        public void MiddleDragDoesNotRotate()
+        public void LeftDragPansWithoutRotation()
         {
             var input = new CameraInput();
             CameraInputReader.AssignMouseDrag(ref input, false, true, new Vector2(50f, -20f));
             Assert.That(input.RotatePixels, Is.EqualTo(Vector2.zero));
             Assert.That(input.PanPixels, Is.EqualTo(new Vector2(50f, -20f)));
+        }
+
+        [Test]
+        public void MiddleDragDoesNotPan()
+        {
+            var input = new CameraInput();
+            CameraInputReader.AssignMouseDrag(ref input, false, false, new Vector2(50f, -20f));
+            Assert.That(input.PanPixels, Is.EqualTo(Vector2.zero));
+            Assert.That(input.RotatePixels, Is.EqualTo(Vector2.zero));
         }
 
         [Test]
