@@ -208,6 +208,51 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
+        public void OrbitPivotAcceptsNearbySurfaceAndRejectsDistantSurface()
+        {
+            var origin = new Vector3(0f, 10f, 0f);
+            var ray = new Ray(origin, Vector3.down);
+            var plane = new Plane(Vector3.up, Vector3.zero);
+            Vector3 near = CityBuilderCamera.SelectOrbitPivot(ray, origin, 10f, new Vector3(0f, 0f, 0f), plane, out var nearSource);
+            Assert.That(nearSource, Is.EqualTo(CityBuilderCamera.OrbitPivotSource.Surface));
+            Assert.That(near, Is.EqualTo(Vector3.zero));
+            Vector3 distant = CityBuilderCamera.SelectOrbitPivot(ray, origin, 10f, new Vector3(0f, -1000f, 0f), plane, out var distantSource);
+            Assert.That(distantSource, Is.EqualTo(CityBuilderCamera.OrbitPivotSource.NavigationPlane));
+            Assert.That(Vector3.Distance(origin, distant), Is.EqualTo(10f).Within(0.001f));
+        }
+
+        [Test]
+        public void OrbitPivotBoundsNearParallelAndExtremePlaneIntersections()
+        {
+            var origin = new Vector3(0f, 10f, 0f);
+            var plane = new Plane(Vector3.up, Vector3.zero);
+            var shallow = new Ray(origin, new Vector3(1f, -0.001f, 0f).normalized);
+            Vector3 pivot = CityBuilderCamera.SelectOrbitPivot(shallow, origin, 25f, null, plane, out var source);
+            Assert.That(source, Is.EqualTo(CityBuilderCamera.OrbitPivotSource.BoundedRay));
+            Assert.That(Vector3.Distance(origin, pivot), Is.EqualTo(25f).Within(0.001f));
+            var far = new Ray(origin, new Vector3(1f, -0.2f, 0f).normalized);
+            Vector3 farPivot = CityBuilderCamera.SelectOrbitPivot(far, origin, 25f, null, plane, out source);
+            Assert.That(source, Is.EqualTo(CityBuilderCamera.OrbitPivotSource.BoundedRay));
+            Assert.That(Vector3.Distance(origin, farPivot), Is.EqualTo(25f).Within(0.001f));
+            Assert.That(float.IsNaN(farPivot.x) || float.IsInfinity(farPivot.x), Is.False);
+        }
+
+        [TestCase(15f)]
+        [TestCase(80f)]
+        public void SmallOrbitDragHasBoundedAngularAndSpatialResponseAtPitchLimits(float pitch)
+        {
+            var settings = new CameraSettings();
+            var motion = new CameraMotion(Vector3.zero, 0f, pitch, 25f, settings);
+            motion.BeginOrbit(Vector3.zero, settings);
+            Vector3 before = motion.Position;
+            motion.Step(new CameraInput { RotatePixels = new Vector2(2f, -2f) }, 0.016f, settings);
+            Assert.That(Mathf.Abs(motion.Yaw), Is.LessThanOrEqualTo(0.4f + 0.001f));
+            Assert.That(Mathf.Abs(motion.Pitch - pitch), Is.LessThanOrEqualTo(0.4f + 0.001f));
+            Assert.That(Vector3.Distance(before, motion.Position), Is.LessThan(0.25f));
+            Assert.That(Vector3.Distance(motion.Position, motion.OrbitPivot), Is.EqualTo(25f).Within(0.001f));
+        }
+
+        [Test]
         public void InvalidSettingsAndInputRemainFinite()
         {
             var settings = new CameraSettings { zoomMinDistance = float.NaN, zoomMaxDistance = float.NegativeInfinity,

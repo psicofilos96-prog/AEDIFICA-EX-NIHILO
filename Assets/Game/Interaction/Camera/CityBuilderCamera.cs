@@ -12,6 +12,9 @@ namespace Aedifica.Interaction.Camera
         [SerializeField] private float initialYaw = 0f;
         [SerializeField] private float initialPitch = 45f;
         [SerializeField] private float initialDistance = 25f;
+        [SerializeField] private bool debugOrbit;
+
+        public enum OrbitPivotSource { Surface, NavigationPlane, BoundedRay }
 
         private CameraMotion motion;
         private UnityEngine.Camera sceneCamera;
@@ -20,6 +23,7 @@ namespace Aedifica.Interaction.Camera
         private Plane grabPlane;
         private Vector3 grabbedPoint;
         private bool wasOrbiting;
+        private OrbitPivotSource orbitPivotSource;
 
         public void SetPanSuppressed(bool suppressed) => panSuppressed = suppressed;
 
@@ -53,6 +57,34 @@ namespace Aedifica.Interaction.Camera
 
         public static Ray ViewportCenterRay(UnityEngine.Camera camera) => camera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
 
+        public static Vector3 SelectOrbitPivot(Ray ray, Vector3 cameraPosition, float navigationDistance,
+            Vector3? surfacePoint, Plane plane, out OrbitPivotSource source)
+        {
+            float minimum = navigationDistance * 0.5f;
+            float maximum = navigationDistance * 1.5f;
+            if (surfacePoint.HasValue && IsUseful(surfacePoint.Value))
+            {
+                source = OrbitPivotSource.Surface;
+                return surfacePoint.Value;
+            }
+            // A nearly parallel ray can place the plane intersection arbitrarily far away.
+            if (Mathf.Abs(Vector3.Dot(ray.direction, plane.normal)) >= 0.1f &&
+                TryGroundPoint(ray, plane, out Vector3 planePoint) && IsUseful(planePoint))
+            {
+                source = OrbitPivotSource.NavigationPlane;
+                return planePoint;
+            }
+            source = OrbitPivotSource.BoundedRay;
+            return cameraPosition + ray.direction * navigationDistance;
+
+            bool IsUseful(Vector3 candidate)
+            {
+                float distance = Vector3.Distance(cameraPosition, candidate);
+                return !float.IsNaN(distance) && !float.IsInfinity(distance) &&
+                    distance >= minimum && distance <= maximum;
+            }
+        }
+
         private Vector3 ChooseOrbitPivot()
         {
             Ray centerRay = ViewportCenterRay(sceneCamera);
@@ -64,9 +96,16 @@ namespace Aedifica.Interaction.Camera
                     nearest = hit.distance;
                     surfacePoint = hit.point;
                 }
-            if (nearest < float.MaxValue) return surfacePoint;
             var plane = new Plane(Vector3.up, new Vector3(0f, motion.Focus.y, 0f));
-            return TryGroundPoint(centerRay, plane, out Vector3 point) ? point : motion.Focus;
+            Vector3 pivot = SelectOrbitPivot(centerRay, sceneCamera.transform.position, motion.Distance,
+                nearest < float.MaxValue ? surfacePoint : (Vector3?)null, plane, out orbitPivotSource);
+            if (debugOrbit)
+            {
+                float surfaceDistance = nearest < float.MaxValue ? Vector3.Distance(sceneCamera.transform.position, surfacePoint) : float.NaN;
+                float planeDistance = TryGroundPoint(centerRay, plane, out Vector3 point) ? Vector3.Distance(sceneCamera.transform.position, point) : float.NaN;
+                Debug.Log($"Orbit begin: source={orbitPivotSource}, navigationDistance={motion.Distance:F3}, surfaceDistance={surfaceDistance:F3}, planeDistance={planeDistance:F3}, pivotDistance={Vector3.Distance(sceneCamera.transform.position, pivot):F3}, yaw={motion.Yaw:F2}, pitch={motion.Pitch:F2}", this);
+            }
+            return pivot;
         }
 
         private void OnValidate() => settings?.Normalize();
@@ -115,7 +154,10 @@ namespace Aedifica.Interaction.Camera
                 input.KeyboardYaw = 0f;
                 input.Scroll = 0f;
             }
+            Vector3 previousPosition = motion.Position;
             motion.Step(input, Time.unscaledDeltaTime, settings);
+            if (debugOrbit && orbiting && input.RotatePixels != Vector2.zero)
+                Debug.Log($"Orbit drag: source={orbitPivotSource}, mouseDelta={input.RotatePixels}, yaw={motion.Yaw:F2}, pitch={motion.Pitch:F2}, pivotDistance={Vector3.Distance(motion.Position, motion.OrbitPivot):F3}, cameraDisplacement={Vector3.Distance(previousPosition, motion.Position):F3}", this);
             ApplyTransform();
         }
 
