@@ -8,6 +8,9 @@ namespace Aedifica.Interaction.Camera
         public float Yaw { get; private set; }
         public float Pitch { get; private set; }
         public float Distance { get; private set; }
+        public float TargetYaw => targetYaw;
+        public float TargetPitch => targetPitch;
+        public float TargetDistance => targetDistance;
 
         private Vector3 targetFocus;
         private float targetYaw;

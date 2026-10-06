@@ -12,8 +12,19 @@ namespace Aedifica.Interaction.Camera
         public Vector2 PanPixels;
     }
 
+    public struct CameraInputDiagnostics
+    {
+        public bool RightPressed;
+        public bool MiddlePressed;
+        public Vector2 MouseDelta;
+        public float RawScrollY;
+        public CameraInput Input;
+    }
+
     public static class CameraInputReader
     {
+        public static CameraInputDiagnostics LastDiagnostics { get; private set; }
+
         private static bool ownsCursorLock;
         private static CursorLockMode previousLockMode;
         private static bool previousVisibility;
@@ -29,14 +40,20 @@ namespace Aedifica.Interaction.Camera
                     (keyboard.wKey.isPressed ? 1f : 0f) - (keyboard.sKey.isPressed ? 1f : 0f));
                 input.KeyboardYaw = (keyboard.eKey.isPressed ? 1f : 0f) - (keyboard.qKey.isPressed ? 1f : 0f);
             }
+            var diagnostics = new CameraInputDiagnostics();
             if (mouse != null)
             {
-                bool rightPressed = mouse.rightButton.isPressed;
-                SetRotationCapture(rightPressed);
-                input.Scroll = mouse.scroll.ReadValue().y / 120f;
-                AssignMouseDrag(ref input, rightPressed, mouse.middleButton.isPressed, mouse.delta.ReadValue());
+                diagnostics.RightPressed = mouse.rightButton.isPressed;
+                diagnostics.MiddlePressed = mouse.middleButton.isPressed;
+                SetRotationCapture(diagnostics.RightPressed);
+                diagnostics.RawScrollY = mouse.scroll.ReadValue().y;
+                diagnostics.MouseDelta = mouse.delta.ReadValue();
+                input.Scroll = diagnostics.RawScrollY / 120f;
+                AssignMouseDrag(ref input, diagnostics.RightPressed, diagnostics.MiddlePressed, diagnostics.MouseDelta);
             }
             else ReleaseRotationCapture();
+            diagnostics.Input = input;
+            LastDiagnostics = diagnostics;
             return input;
         }
 
