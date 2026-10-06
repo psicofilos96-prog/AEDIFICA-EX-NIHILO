@@ -162,7 +162,15 @@ namespace Aedifica.Tests.EditMode
                 var camera = cameraObject.AddComponent<UnityEngine.Camera>();
                 cameraObject.transform.SetPositionAndRotation(new Vector3(2f, 10f, -5f), Quaternion.Euler(45f, 30f, 0f));
                 Ray ray = CityBuilderCamera.ViewportCenterRay(camera);
-                Assert.That(Vector3.Angle(ray.direction, cameraObject.transform.forward), Is.LessThan(0.001f));
+                Vector3 forward = cameraObject.transform.forward;
+                Vector3 direction = ray.direction.normalized;
+                string geometry = $"position={camera.transform.position}, rotation={camera.transform.rotation}, forward={forward}, pixelRect={camera.pixelRect}, aspect={camera.aspect}, viewport=(0.5,0.5), rayOrigin={ray.origin}, rayDirection={ray.direction}";
+                // Cross product remains precise near parallel vectors; Angle's acos(dot) loses precision there.
+                Assert.That(Vector3.Dot(direction, forward), Is.GreaterThan(0f), geometry);
+                Assert.That(Vector3.Cross(direction, forward).sqrMagnitude, Is.LessThan(1e-8f), geometry);
+                Vector3 projected = camera.WorldToViewportPoint(ray.GetPoint(10f));
+                Assert.That(projected.x, Is.EqualTo(0.5f).Within(0.0001f), geometry);
+                Assert.That(projected.y, Is.EqualTo(0.5f).Within(0.0001f), geometry);
             }
             finally { Object.DestroyImmediate(cameraObject); }
         }
