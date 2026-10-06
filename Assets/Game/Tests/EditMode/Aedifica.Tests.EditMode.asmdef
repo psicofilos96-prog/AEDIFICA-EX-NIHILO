@@ -4,7 +4,9 @@
   "references": [
     "Aedifica.Core",
     "Aedifica.Interaction",
-    "Aedifica.Construction"
+    "Aedifica.Construction",
+    "Aedifica.Geometry",
+    "Aedifica.Rendering"
   ],
   "includePlatforms": [
     "Editor"
