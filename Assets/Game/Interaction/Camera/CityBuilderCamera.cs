@@ -14,9 +14,6 @@ namespace Aedifica.Interaction.Camera
 
         private CameraMotion motion;
 
-        public CameraMotion DiagnosticMotion => motion;
-        public float DiagnosticZoomSpeed => settings.zoomSpeed;
-
         private void OnValidate() => settings?.Normalize();
 
         private void Awake()

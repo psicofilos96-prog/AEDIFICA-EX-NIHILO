@@ -12,27 +12,8 @@ namespace Aedifica.Interaction.Camera
         public Vector2 PanPixels;
     }
 
-    public struct CameraInputDiagnostics
-    {
-        public bool RightPressed;
-        public bool LeftPressed;
-        public bool MiddlePressed;
-        public Vector2 MouseDelta;
-        public float RawScrollY;
-        public CameraScrollRegime ScrollRegime;
-        public float LastNonzeroRawScrollY;
-        public float LastNonzeroNormalizedScroll;
-        public CameraScrollRegime LastNonzeroScrollRegime;
-        public CameraInput Input;
-    }
-
     public static class CameraInputReader
     {
-        public static CameraInputDiagnostics LastDiagnostics { get; private set; }
-
-        private static float lastNonzeroRawScrollY;
-        private static float lastNonzeroNormalizedScroll;
-        private static CameraScrollRegime lastNonzeroScrollRegime;
         private static bool ownsCursorLock;
         private static CursorLockMode previousLockMode;
         private static bool previousVisibility;
@@ -48,30 +29,15 @@ namespace Aedifica.Interaction.Camera
                     (keyboard.wKey.isPressed ? 1f : 0f) - (keyboard.sKey.isPressed ? 1f : 0f));
                 input.KeyboardYaw = (keyboard.eKey.isPressed ? 1f : 0f) - (keyboard.qKey.isPressed ? 1f : 0f);
             }
-            var diagnostics = new CameraInputDiagnostics();
             if (mouse != null)
             {
-                diagnostics.RightPressed = mouse.rightButton.isPressed;
-                diagnostics.LeftPressed = mouse.leftButton.isPressed;
-                diagnostics.MiddlePressed = mouse.middleButton.isPressed;
-                SetRotationCapture(diagnostics.RightPressed);
-                diagnostics.RawScrollY = mouse.scroll.ReadValue().y;
-                diagnostics.MouseDelta = mouse.delta.ReadValue();
-                input.Scroll = CameraScrollProcessor.Process(diagnostics.RawScrollY, out diagnostics.ScrollRegime);
-                if (diagnostics.RawScrollY != 0f)
-                {
-                    lastNonzeroRawScrollY = diagnostics.RawScrollY;
-                    lastNonzeroNormalizedScroll = input.Scroll;
-                    lastNonzeroScrollRegime = diagnostics.ScrollRegime;
-                }
-                AssignMouseDrag(ref input, diagnostics.RightPressed, diagnostics.LeftPressed, diagnostics.MouseDelta);
+                bool rightPressed = mouse.rightButton.isPressed;
+                bool leftPressed = mouse.leftButton.isPressed;
+                SetRotationCapture(rightPressed);
+                input.Scroll = CameraScrollProcessor.Process(mouse.scroll.ReadValue().y, out _);
+                AssignMouseDrag(ref input, rightPressed, leftPressed, mouse.delta.ReadValue());
             }
             else ReleaseRotationCapture();
-            diagnostics.LastNonzeroRawScrollY = lastNonzeroRawScrollY;
-            diagnostics.LastNonzeroNormalizedScroll = lastNonzeroNormalizedScroll;
-            diagnostics.LastNonzeroScrollRegime = lastNonzeroScrollRegime;
-            diagnostics.Input = input;
-            LastDiagnostics = diagnostics;
             return input;
         }
 
