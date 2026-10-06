@@ -277,6 +277,8 @@ MonoBehaviour:
     zoomMaxDistance: 400
     yawSpeed: 0.2
     pitchSpeed: 0.2
+    orbitYawSensitivity: 0.15
+    orbitPitchSensitivity: 0.15
     keyboardYawSpeed: 90
     pitchMin: 15
     pitchMax: 80

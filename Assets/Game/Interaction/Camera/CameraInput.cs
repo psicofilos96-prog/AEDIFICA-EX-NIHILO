@@ -17,6 +17,7 @@ namespace Aedifica.Interaction.Camera
         private static bool ownsCursorLock;
         private static CursorLockMode previousLockMode;
         private static bool previousVisibility;
+        private static RotationCaptureFilter rotationCaptureFilter;
 
         public static CameraInput Read()
         {
@@ -35,7 +36,9 @@ namespace Aedifica.Interaction.Camera
                 bool leftPressed = mouse.leftButton.isPressed;
                 SetRotationCapture(rightPressed);
                 input.Scroll = CameraScrollProcessor.Process(mouse.scroll.ReadValue().y, out _);
-                AssignMouseDrag(ref input, rightPressed, leftPressed, mouse.delta.ReadValue());
+                Vector2 delta = mouse.delta.ReadValue();
+                if (rightPressed) delta = rotationCaptureFilter.Filter(delta);
+                AssignMouseDrag(ref input, rightPressed, leftPressed, delta);
             }
             else ReleaseRotationCapture();
             return input;
@@ -60,6 +63,7 @@ namespace Aedifica.Interaction.Camera
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
             ownsCursorLock = true;
+            rotationCaptureFilter.BeginCapture();
         }
 
         public static void ReleaseRotationCapture()
@@ -68,6 +72,24 @@ namespace Aedifica.Interaction.Camera
             Cursor.lockState = previousLockMode;
             Cursor.visible = previousVisibility;
             ownsCursorLock = false;
+            rotationCaptureFilter.Reset();
         }
+    }
+
+    public struct RotationCaptureFilter
+    {
+        private int framesToIgnore;
+
+        // Cursor locking can recenter the pointer and report that warp as mouse delta.
+        public void BeginCapture() => framesToIgnore = 2;
+
+        public Vector2 Filter(Vector2 delta)
+        {
+            if (framesToIgnore <= 0) return delta;
+            framesToIgnore--;
+            return Vector2.zero;
+        }
+
+        public void Reset() => framesToIgnore = 0;
     }
 }

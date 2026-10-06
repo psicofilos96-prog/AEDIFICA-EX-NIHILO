@@ -45,6 +45,64 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
+        public void RotationCaptureDiscardsCursorWarpBeforeReadingUserDrag()
+        {
+            var filter = new RotationCaptureFilter();
+            filter.BeginCapture();
+            Assert.That(filter.Filter(new Vector2(390f, -170f)), Is.EqualTo(Vector2.zero));
+            Assert.That(filter.Filter(new Vector2(-380f, 160f)), Is.EqualTo(Vector2.zero));
+            Assert.That(filter.Filter(new Vector2(20f, -10f)), Is.EqualTo(new Vector2(20f, -10f)));
+            filter.Reset();
+            Assert.That(filter.Filter(Vector2.right), Is.EqualTo(Vector2.right));
+        }
+
+        [Test]
+        public void RmbStartPositionDoesNotChangeCenterPivotOrOrbitResult()
+        {
+            var cameraObject = new GameObject("RMB start test");
+            try
+            {
+                var camera = cameraObject.AddComponent<UnityEngine.Camera>();
+                camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
+                var settings = new CameraSettings();
+                var starts = new[] { new Vector2(400f, 300f), new Vector2(30f, 300f),
+                    new Vector2(770f, 300f), new Vector2(790f, 20f) };
+                Vector3? firstPivot = null;
+                Vector3? firstResult = null;
+                foreach (Vector2 start in starts)
+                {
+                    var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+                    camera.transform.SetPositionAndRotation(motion.Position, motion.Rotation);
+                    Ray centerRay = CityBuilderCamera.ViewportCenterRay(camera);
+                    var plane = new Plane(Vector3.up, Vector3.zero);
+                    Vector3 pivot = CityBuilderCamera.SelectOrbitPivot(centerRay, motion.Position, motion.Distance,
+                        null, plane, out _);
+                    motion.BeginOrbit(pivot, settings);
+                    var filter = new RotationCaptureFilter();
+                    filter.BeginCapture();
+                    Vector2 cursorWarp = new Vector2(400f, 300f) - start;
+                    motion.Step(new CameraInput { RotatePixels = filter.Filter(cursorWarp) }, 0.016f, settings);
+                    motion.Step(new CameraInput { RotatePixels = filter.Filter(cursorWarp) }, 0.016f, settings);
+                    motion.Step(new CameraInput { RotatePixels = filter.Filter(new Vector2(20f, -10f)) }, 0.016f, settings);
+                    if (firstPivot.HasValue)
+                    {
+                        Assert.That(Vector3.Distance(pivot, firstPivot.Value), Is.LessThan(0.0001f));
+                        Assert.That(Vector3.Distance(motion.Position, firstResult.Value), Is.LessThan(0.0001f));
+                    }
+                    else
+                    {
+                        firstPivot = pivot;
+                        firstResult = motion.Position;
+                    }
+                    Assert.That(Vector3.Distance(motion.Position, pivot), Is.EqualTo(motion.Distance).Within(0.001f));
+                }
+                Assert.That(settings.orbitYawSensitivity, Is.EqualTo(0.15f));
+                Assert.That(settings.orbitPitchSensitivity, Is.EqualTo(0.15f));
+            }
+            finally { Object.DestroyImmediate(cameraObject); }
+        }
+
+        [Test]
         public void LeftDragPansWithoutRotation()
         {
             var input = new CameraInput();
