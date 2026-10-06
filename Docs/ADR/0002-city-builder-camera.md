@@ -13,3 +13,9 @@ Medições locais mostraram raw scroll ±1 por passo da roda física e ±0,025 p
 `CameraSettings` centraliza limites e sensibilidades, normaliza valores inválidos e impõe teto finito de 10000 para escalares positivos. A câmera não usa busca de objetos, raycast, LINQ ou criação de GameObjects por frame. ConstructionLab contém apenas piso e cubos de referência.
 
 Alternativas rejeitadas: Cinemachine, Legacy Input Manager, FOV como zoom, pivô GameObject obrigatório, física de mola e raycasts contínuos. Extensões futuras possíveis: foco por seleção, limites opcionais de mundo e prevenção de colisão. O jogo deverá permitir remapeamento de controles e ajuste de sensibilidades, inclusive de zoom; o conflito futuro entre LMB pan e seleção/construção será resolvido nessa etapa. P0.1 não implementa menu de configurações nem framework de rebinding.
+
+## Configuração homologada do RMB em P0.6
+
+O RMB usa um pivô escolhido pelo raio do centro da viewport `(0.5, 0.5)` e o mantém fixo durante o gesto. `CameraInputReader` descarta os dois primeiros deltas após bloquear/recentralizar o cursor. `CameraSettings` define 0,15°/pixel como default separado para yaw e pitch orbital. `yawSpeed` e `pitchSpeed` (0,20°/pixel) são campos legados usados pelo caminho de rotação fora da órbita e não determinam a sensibilidade do RMB durante `IsOrbiting`.
+
+Na ConstructionLab, os campos serializados de `CityBuilderCamera.settings` são a configuração efetiva e devem manter `orbitYawSensitivity = 0.15` e `orbitPitchSensitivity = 0.15`, sem inversão. Os defaults C# devem concordar com a cena. Toda alteração de `ConstructionLab.unity` deve preservar esses valores e as referências da câmera. O teste EditMode `ConstructionLabCameraConfigurationTests` abre a cena versionada e verifica o componente e seus campos serializados, além dos defaults C#. Uma mudança só no código ou só no YAML deve falhar nesse teste.
