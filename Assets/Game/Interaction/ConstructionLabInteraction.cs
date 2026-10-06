@@ -129,6 +129,7 @@ namespace Aedifica.Interaction
             Ray ray = sceneCamera.ScreenPointToRay(pointer);
             RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
             if (debugSelection) Debug.Log($"Selection Ray: origin={ray.origin}, direction={ray.direction}, hits={hits.Length}", this);
+            if (debugSelection && hits.Length == 0) LogMissDiagnostics(pointer, ray);
             var result = new PickResult { HandleDistance = float.MaxValue, ViewDistance = float.MaxValue };
             foreach (RaycastHit hit in hits)
             {
@@ -147,6 +148,27 @@ namespace Aedifica.Interaction
                 }
             }
             return result;
+        }
+
+        private void LogMissDiagnostics(Vector2 pointer, Ray ray)
+        {
+            Debug.Log($"Selection viewport: pointer={pointer}, screen={Screen.width}x{Screen.height}, cameraPixels={sceneCamera.pixelWidth}x{sceneCamera.pixelHeight}, pixelRect={sceneCamera.pixelRect}, viewport={sceneCamera.ScreenToViewportPoint(pointer)}, cameraPosition={sceneCamera.transform.position}, cameraRotation={sceneCamera.transform.rotation}", this);
+            foreach (PieceData piece in lab.World.Pieces)
+            {
+                if (!lab.TryGetView(piece.Id, out PieceView view)) continue;
+                BoxCollider collider = view.GetComponent<BoxCollider>();
+                Vector3 center = collider.bounds.center;
+                bool boundsIntersect = collider.bounds.IntersectRay(ray);
+                bool centerRayHit = Physics.Raycast(sceneCamera.transform.position, center - sceneCamera.transform.position,
+                    out RaycastHit centerHit, 1000f);
+                Debug.Log($"Selection block: id={piece.Id}, active={view.gameObject.activeInHierarchy}, layer={view.gameObject.layer}, colliderEnabled={collider.enabled}, colliderCenter={center}, colliderSize={collider.bounds.size}, screenCenter={sceneCamera.WorldToScreenPoint(center)}, pointerRayIntersectsBounds={boundsIntersect}, centerRayHit={(centerRayHit ? centerHit.collider.name : "none")}", view);
+            }
+            foreach (string name in new[] { "Lab Scale 1m", "Lab Scale 5m", "Lab Scale 10m" })
+            {
+                GameObject reference = GameObject.Find(name);
+                if (reference == null || !reference.TryGetComponent(out Renderer renderer)) continue;
+                Debug.Log($"Selection reference: name={name}, screenCenter={sceneCamera.WorldToScreenPoint(renderer.bounds.center)}, pointerRayIntersectsBounds={renderer.bounds.IntersectRay(ray)}, boundsCenter={renderer.bounds.center}, boundsSize={renderer.bounds.size}, collider={reference.GetComponent<Collider>()}", reference);
+            }
         }
 
         private struct PickResult

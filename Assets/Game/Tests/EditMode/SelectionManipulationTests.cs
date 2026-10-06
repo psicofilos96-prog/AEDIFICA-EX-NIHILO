@@ -61,7 +61,7 @@ namespace Aedifica.Tests.EditMode
             Assert.Throws<ArgumentException>(() => original.WithBlockDimensions(default));
         }
 
-        [TestCase(ManipulationAxis.X, 1f, 2f, 3f)]
+        [TestCase(ManipulationAxis.X, 2f, 2f, 3f)]
         [TestCase(ManipulationAxis.Y, 1f, 3f, 3f)]
         [TestCase(ManipulationAxis.Z, 1f, 2f, 4f)]
         public void MoveChangesOnlyChosenWorldAxis(ManipulationAxis axis, float x, float y, float z)
