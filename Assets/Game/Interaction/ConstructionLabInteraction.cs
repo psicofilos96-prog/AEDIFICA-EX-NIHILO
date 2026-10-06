@@ -1,3 +1,4 @@
+using System;
 using Aedifica.Construction;
 using Aedifica.Interaction.Camera;
 using Aedifica.Rendering;
@@ -17,6 +18,16 @@ namespace Aedifica.Interaction
 
         [SerializeField] private UnityEngine.Camera sceneCamera;
         [SerializeField] private CityBuilderCamera cityCamera;
+        [SerializeField] private bool debugSelection;
+
+        public PieceId? SelectedPieceId => selection.SelectedPieceId;
+
+        public void Configure(UnityEngine.Camera camera, CityBuilderCamera controller)
+        {
+            if (lab != null) throw new InvalidOperationException("Configure interaction before Awake.");
+            sceneCamera = camera != null ? camera : throw new ArgumentNullException(nameof(camera));
+            cityCamera = controller != null ? controller : throw new ArgumentNullException(nameof(controller));
+        }
 
         private ConstructionLabBlocks lab;
         private RuntimeGizmo gizmo;
@@ -25,14 +36,25 @@ namespace Aedifica.Interaction
         private ManipulationSession session;
         private PieceId? pressedPieceId;
         private Vector2 pressPosition;
+        private bool lastObservedLeftPressed;
 
-        private void Awake() => lab = GetComponent<ConstructionLabBlocks>();
+        private void Awake()
+        {
+            lab = GetComponent<ConstructionLabBlocks>();
+            if (lab == null) throw new InvalidOperationException("ConstructionLabInteraction requires ConstructionLabBlocks on the same GameObject.");
+            if (sceneCamera == null) throw new InvalidOperationException("ConstructionLabInteraction.sceneCamera is not assigned.");
+            if (cityCamera == null) throw new InvalidOperationException("ConstructionLabInteraction.cityCamera is not assigned.");
+            if (cityCamera.GetComponent<UnityEngine.Camera>() != sceneCamera)
+                throw new InvalidOperationException("ConstructionLabInteraction cameras must refer to the same Camera GameObject.");
+            if (debugSelection) Debug.Log($"Selection Awake: lab={lab.name}, camera={sceneCamera.name}, cityCamera={cityCamera.name}", this);
+        }
 
         private void Start()
         {
             var gizmoObject = new GameObject("Construction Gizmo");
             gizmo = gizmoObject.AddComponent<RuntimeGizmo>();
             gizmo.Initialize(sceneCamera, lab.SharedBlockMaterial);
+            if (debugSelection) Debug.Log($"Selection Start: pieces={lab.World.Count}, mouse={(Mouse.current != null ? Mouse.current.name : "none")}", this);
         }
 
         private void Update()
@@ -48,39 +70,30 @@ namespace Aedifica.Interaction
             Mouse mouse = Mouse.current;
             if (mouse == null) return;
             Vector2 pointer = mouse.position.ReadValue();
-            if (mouse.leftButton.wasPressedThisFrame) BeginPointer(pointer);
+            if (debugSelection && mouse.leftButton.isPressed != lastObservedLeftPressed)
+                Debug.Log($"Selection LMB state: pressed={mouse.leftButton.isPressed}, wasPressed={mouse.leftButton.wasPressedThisFrame}, wasReleased={mouse.leftButton.wasReleasedThisFrame}, pointer={pointer}", this);
+            lastObservedLeftPressed = mouse.leftButton.isPressed;
+            if (mouse.leftButton.wasPressedThisFrame)
+            {
+                if (debugSelection) Debug.Log($"Selection PointerDown: {pointer}", this);
+                PointerDown(pointer);
+            }
             if (session != null && (mouse.leftButton.isPressed || mouse.leftButton.wasReleasedThisFrame)) UpdateManipulation(pointer);
-            if (mouse.leftButton.wasReleasedThisFrame) EndPointer(pointer);
+            if (mouse.leftButton.wasReleasedThisFrame) PointerUp(pointer);
 
             if (selection.SelectedPieceId is PieceId id && lab.World.TryGet(id, out PieceData piece)) gizmo.Show(piece, mode);
             else gizmo.Hide();
         }
 
-        private void BeginPointer(Vector2 pointer)
+        public void PointerDown(Vector2 pointer)
         {
             pressPosition = pointer;
             pressedPieceId = null;
-            Physics.SyncTransforms();
-            RaycastHit[] hits = Physics.RaycastAll(sceneCamera.ScreenPointToRay(pointer), 1000f);
-            GizmoHandle nearestHandle = null;
-            PieceView nearestPiece = null;
-            float handleDistance = float.MaxValue;
-            float pieceDistance = float.MaxValue;
-            foreach (RaycastHit hit in hits)
-            {
-                GizmoHandle handle = hit.collider.GetComponent<GizmoHandle>();
-                if (handle != null && handle.gameObject.activeInHierarchy && hit.distance < handleDistance)
-                {
-                    nearestHandle = handle;
-                    handleDistance = hit.distance;
-                }
-                PieceView view = hit.collider.GetComponent<PieceView>();
-                if (view != null && hit.distance < pieceDistance)
-                {
-                    nearestPiece = view;
-                    pieceDistance = hit.distance;
-                }
-            }
+            PickResult picked = Pick(pointer);
+            GizmoHandle nearestHandle = picked.Handle;
+            PieceView nearestPiece = picked.View;
+            float handleDistance = picked.HandleDistance;
+            float pieceDistance = picked.ViewDistance;
             if (nearestHandle != null && (nearestPiece == null || handleDistance <= pieceDistance) &&
                 selection.SelectedPieceId is PieceId selectedId && lab.World.TryGet(selectedId, out PieceData selectedPiece))
             {
@@ -95,6 +108,53 @@ namespace Aedifica.Interaction
                 cityCamera.SetPanSuppressed(true);
             }
             else if (nearestPiece != null) pressedPieceId = nearestPiece.Id;
+            if (debugSelection) Debug.Log($"Selection PointerDown result: pressedPiece={pressedPieceId}, handle={nearestHandle}", this);
+        }
+
+        public bool TryPickPieceAt(Vector2 pointer, out PieceId id)
+        {
+            PieceView view = Pick(pointer).View;
+            if (view != null && lab.World.TryGet(view.Id, out _))
+            {
+                id = view.Id;
+                return true;
+            }
+            id = default;
+            return false;
+        }
+
+        private PickResult Pick(Vector2 pointer)
+        {
+            Physics.SyncTransforms();
+            Ray ray = sceneCamera.ScreenPointToRay(pointer);
+            RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
+            if (debugSelection) Debug.Log($"Selection Ray: origin={ray.origin}, direction={ray.direction}, hits={hits.Length}", this);
+            var result = new PickResult { HandleDistance = float.MaxValue, ViewDistance = float.MaxValue };
+            foreach (RaycastHit hit in hits)
+            {
+                GizmoHandle handle = hit.collider.GetComponent<GizmoHandle>();
+                PieceView view = hit.collider.GetComponent<PieceView>();
+                if (debugSelection) Debug.Log($"Selection Hit: collider={hit.collider.name}, distance={hit.distance}, view={view}, id={(view != null ? view.Id.ToString() : "none")}", this);
+                if (handle != null && handle.gameObject.activeInHierarchy && hit.distance < result.HandleDistance)
+                {
+                    result.Handle = handle;
+                    result.HandleDistance = hit.distance;
+                }
+                if (view != null && hit.distance < result.ViewDistance)
+                {
+                    result.View = view;
+                    result.ViewDistance = hit.distance;
+                }
+            }
+            return result;
+        }
+
+        private struct PickResult
+        {
+            public GizmoHandle Handle;
+            public PieceView View;
+            public float HandleDistance;
+            public float ViewDistance;
         }
 
         private void UpdateManipulation(Vector2 pointer)
@@ -105,14 +165,16 @@ namespace Aedifica.Interaction
             lab.Apply(changed);
         }
 
-        private void EndPointer(Vector2 pointer)
+        public void PointerUp(Vector2 pointer)
         {
             if (session != null)
             {
                 EndManipulation();
                 return;
             }
-            if (!IsClick(pressPosition, pointer)) return;
+            bool isClick = IsClick(pressPosition, pointer);
+            if (debugSelection) Debug.Log($"Selection PointerUp: start={pressPosition}, end={pointer}, click={isClick}, pressedPiece={pressedPieceId}", this);
+            if (!isClick) return;
             PieceId? next = pressedPieceId;
             PieceId? old = selection.SelectedPieceId;
             if (old is PieceId oldId && lab.TryGetView(oldId, out PieceView oldView)) oldView.SetSelected(false);
@@ -120,8 +182,13 @@ namespace Aedifica.Interaction
             {
                 selection.Select(nextId);
                 nextView.SetSelected(true);
+                if (debugSelection) Debug.Log($"Selection applied: {nextId}", this);
             }
-            else selection.Clear();
+            else
+            {
+                selection.Clear();
+                if (debugSelection) Debug.Log("Selection cleared", this);
+            }
         }
 
         private void OnDisable() => EndManipulation();

@@ -15,6 +15,12 @@ namespace Aedifica.Rendering
         public ConstructionWorld World => world;
         public Material SharedBlockMaterial => sharedBlockMaterial;
 
+        public void ConfigureMaterial(Material material)
+        {
+            if (world != null) throw new InvalidOperationException("Configure the lab before Awake.");
+            sharedBlockMaterial = material != null ? material : throw new ArgumentNullException(nameof(material));
+        }
+
         private void Awake()
         {
             if (sharedBlockMaterial == null) throw new InvalidOperationException("ConstructionLab requires a URP block material.");
