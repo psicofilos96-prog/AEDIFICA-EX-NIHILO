@@ -16,6 +16,14 @@ namespace Aedifica.Construction
             return pieces.TryAdd(piece.Id, piece);
         }
 
+        public bool Replace(PieceId id, PieceData replacement)
+        {
+            if (replacement == null) throw new ArgumentNullException(nameof(replacement));
+            if (!id.IsValid || replacement.Id != id || !pieces.ContainsKey(id)) return false;
+            pieces[id] = replacement;
+            return true;
+        }
+
         public bool TryGet(PieceId id, out PieceData piece)
         {
             piece = null;

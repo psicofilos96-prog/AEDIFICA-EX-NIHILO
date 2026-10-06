@@ -2,7 +2,9 @@
   "name": "Aedifica.Tests.PlayMode",
   "rootNamespace": "Aedifica.Tests.PlayMode",
   "references": [
-    "Aedifica.Core"
+    "Aedifica.Core",
+    "Aedifica.Construction",
+    "Aedifica.Rendering"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

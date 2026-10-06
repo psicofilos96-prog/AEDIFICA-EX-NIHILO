@@ -14,6 +14,9 @@ namespace Aedifica.Construction
         {
         }
 
+        public PieceData WithTransform(PieceTransform transform) => new PieceData(Id, Type, transform, BlockDimensions);
+        public PieceData WithBlockDimensions(BlockDimensions dimensions) => new PieceData(Id, Type, Transform, dimensions);
+
         public PieceData(PieceId id, PieceType type, PieceTransform transform, BlockDimensions blockDimensions)
         {
             if (type != PieceType.Block) throw new ArgumentOutOfRangeException(nameof(type), "Only Block is supported in P0.2.");

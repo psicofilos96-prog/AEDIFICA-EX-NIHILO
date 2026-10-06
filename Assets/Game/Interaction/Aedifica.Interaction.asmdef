@@ -3,7 +3,9 @@
   "rootNamespace": "Aedifica.Interaction",
   "references": [
     "Aedifica.Core",
-    "Unity.InputSystem"
+    "Unity.InputSystem",
+    "Aedifica.Construction",
+    "Aedifica.Rendering"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

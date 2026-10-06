@@ -13,6 +13,9 @@ namespace Aedifica.Interaction.Camera
         [SerializeField] private float initialDistance = 25f;
 
         private CameraMotion motion;
+        private bool panSuppressed;
+
+        public void SetPanSuppressed(bool suppressed) => panSuppressed = suppressed;
 
         private void OnValidate() => settings?.Normalize();
 
@@ -32,7 +35,9 @@ namespace Aedifica.Interaction.Camera
 
         private void Update()
         {
-            motion.Step(CameraInputReader.Read(), Time.unscaledDeltaTime, settings);
+            CameraInput input = CameraInputReader.Read();
+            if (panSuppressed) input.PanPixels = Vector2.zero;
+            motion.Step(input, Time.unscaledDeltaTime, settings);
             ApplyTransform();
         }
 

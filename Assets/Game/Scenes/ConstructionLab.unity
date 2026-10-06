@@ -795,6 +795,7 @@ GameObject:
   m_Component:
   - component: {fileID: 900000001}
   - component: {fileID: 900000002}
+  - component: {fileID: 900000003}
   m_Layer: 0
   m_Name: Construction Lab Blocks
   m_TagString: Untagged
@@ -830,6 +831,20 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   sharedBlockMaterial: {fileID: 2100000, guid: d7567ebec10a4f09a43866b06fcdaae7, type: 2}
+--- !u!114 &900000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 900000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 14e3d7dbabb64c97bf93da569c62f4fb, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  sceneCamera: {fileID: 330585545}
+  cityCamera: {fileID: 330585548}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

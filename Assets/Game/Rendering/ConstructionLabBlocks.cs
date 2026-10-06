@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Aedifica.Construction;
-using Aedifica.Geometry;
 using UnityEngine;
 
 namespace Aedifica.Rendering
@@ -11,8 +10,10 @@ namespace Aedifica.Rendering
         [SerializeField] private Material sharedBlockMaterial;
 
         private ConstructionWorld world;
-        private readonly List<Mesh> meshes = new List<Mesh>();
-        private readonly List<GameObject> views = new List<GameObject>();
+        private readonly Dictionary<PieceId, PieceView> views = new Dictionary<PieceId, PieceView>();
+
+        public ConstructionWorld World => world;
+        public Material SharedBlockMaterial => sharedBlockMaterial;
 
         private void Awake()
         {
@@ -27,23 +28,26 @@ namespace Aedifica.Rendering
 
             foreach (PieceData piece in world.Pieces)
             {
-                BlockGeometry geometry = BlockGeometryGenerator.Generate(piece.BlockDimensions);
-                Mesh mesh = BlockMeshFactory.Build(geometry);
-                meshes.Add(mesh);
-                var view = new GameObject($"Lab Block {piece.Id}");
-                views.Add(view);
-                view.transform.SetParent(transform, false);
-                view.transform.SetPositionAndRotation(piece.Transform.Position, piece.Transform.Rotation);
-                view.transform.localScale = Vector3.one;
-                view.AddComponent<MeshFilter>().sharedMesh = mesh;
-                view.AddComponent<MeshRenderer>().sharedMaterial = sharedBlockMaterial;
+                var viewObject = new GameObject($"Lab Block {piece.Id}");
+                viewObject.transform.SetParent(transform, false);
+                PieceView view = viewObject.AddComponent<PieceView>();
+                view.Initialize(piece, sharedBlockMaterial);
+                views.Add(piece.Id, view);
             }
         }
 
         private void OnDestroy()
         {
-            foreach (GameObject view in views) if (view != null) Destroy(view);
-            foreach (Mesh mesh in meshes) if (mesh != null) Destroy(mesh);
+            foreach (PieceView view in views.Values) if (view != null) Destroy(view.gameObject);
+        }
+
+        public bool TryGetView(PieceId id, out PieceView view) => views.TryGetValue(id, out view);
+
+        public bool Apply(PieceData replacement)
+        {
+            if (replacement == null || !world.Replace(replacement.Id, replacement)) return false;
+            views[replacement.Id].Refresh(replacement);
+            return true;
         }
     }
 }
