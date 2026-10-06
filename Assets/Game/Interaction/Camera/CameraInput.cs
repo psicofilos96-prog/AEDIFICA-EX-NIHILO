@@ -19,8 +19,10 @@ namespace Aedifica.Interaction.Camera
         public bool MiddlePressed;
         public Vector2 MouseDelta;
         public float RawScrollY;
+        public CameraScrollRegime ScrollRegime;
         public float LastNonzeroRawScrollY;
         public float LastNonzeroNormalizedScroll;
+        public CameraScrollRegime LastNonzeroScrollRegime;
         public CameraInput Input;
     }
 
@@ -30,6 +32,7 @@ namespace Aedifica.Interaction.Camera
 
         private static float lastNonzeroRawScrollY;
         private static float lastNonzeroNormalizedScroll;
+        private static CameraScrollRegime lastNonzeroScrollRegime;
         private static bool ownsCursorLock;
         private static CursorLockMode previousLockMode;
         private static bool previousVisibility;
@@ -54,17 +57,19 @@ namespace Aedifica.Interaction.Camera
                 SetRotationCapture(diagnostics.RightPressed);
                 diagnostics.RawScrollY = mouse.scroll.ReadValue().y;
                 diagnostics.MouseDelta = mouse.delta.ReadValue();
-                input.Scroll = diagnostics.RawScrollY / 120f;
+                input.Scroll = CameraScrollProcessor.Process(diagnostics.RawScrollY, out diagnostics.ScrollRegime);
                 if (diagnostics.RawScrollY != 0f)
                 {
                     lastNonzeroRawScrollY = diagnostics.RawScrollY;
                     lastNonzeroNormalizedScroll = input.Scroll;
+                    lastNonzeroScrollRegime = diagnostics.ScrollRegime;
                 }
                 AssignMouseDrag(ref input, diagnostics.RightPressed, diagnostics.LeftPressed, diagnostics.MouseDelta);
             }
             else ReleaseRotationCapture();
             diagnostics.LastNonzeroRawScrollY = lastNonzeroRawScrollY;
             diagnostics.LastNonzeroNormalizedScroll = lastNonzeroNormalizedScroll;
+            diagnostics.LastNonzeroScrollRegime = lastNonzeroScrollRegime;
             diagnostics.Input = input;
             LastDiagnostics = diagnostics;
             return input;

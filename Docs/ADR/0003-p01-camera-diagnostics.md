@@ -9,3 +9,5 @@ Na Game View em Play Mode, testar separadamente LMB, RMB com movimento horizonta
 Leitura sugerida: RMB UP indica falha antes do roteamento; RMB DOWN com delta zero aponta à captura/leitura; delta e RotatePixels não zero com alvo imóvel aponta ao cálculo; alvo móvel com Transform imóvel aponta à aplicação. A mesma comparação entre scroll bruto, normalizado e distâncias localiza o zoom lento. O cursor lock anterior foi mantido apenas para observação, sem considerá-lo correção confirmada.
 
 O painel também retém o último scroll bruto/normalizado não zero, pois o valor por frame pode desaparecer antes de ser lido. Registrar separadamente uma rolagem da roda física e um gesto de touchpad; o painel não identifica automaticamente o dispositivo que originou o evento.
+
+Na validação final de zoom, o rótulo Processed Scroll substitui o antigo Normalized Scroll e o painel indica Precision, Transition ou Wheel. O último evento não zero também retém seu regime.

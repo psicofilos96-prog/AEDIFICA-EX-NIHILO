@@ -62,6 +62,51 @@ namespace Aedifica.Tests.EditMode
             Assert.That(input.RotatePixels, Is.EqualTo(Vector2.zero));
         }
 
+        [TestCase(1f, 0.75f, CameraScrollRegime.Wheel)]
+        [TestCase(-1f, -0.75f, CameraScrollRegime.Wheel)]
+        [TestCase(0.025f, 0.025f / 120f, CameraScrollRegime.Precision)]
+        [TestCase(-0.025f, -0.025f / 120f, CameraScrollRegime.Precision)]
+        [TestCase(0f, 0f, CameraScrollRegime.Precision)]
+        public void ScrollProcessingMatchesMeasuredRegimes(float raw, float expected, CameraScrollRegime expectedRegime)
+        {
+            float processed = CameraScrollProcessor.Process(raw, out var regime);
+            Assert.That(processed, Is.EqualTo(expected).Within(0.000001f));
+            Assert.That(regime, Is.EqualTo(expectedRegime));
+        }
+
+        [Test]
+        public void ScrollTransitionIsContinuousAndPreservesSign()
+        {
+            float previous = 0f;
+            for (int i = 1; i <= 100; i++)
+            {
+                float raw = i / 100f;
+                float positive = CameraScrollProcessor.Process(raw, out _);
+                float negative = CameraScrollProcessor.Process(-raw, out _);
+                Assert.That(positive, Is.GreaterThan(previous));
+                Assert.That(negative, Is.EqualTo(-positive).Within(0.000001f));
+                previous = positive;
+            }
+            Assert.That(CameraScrollProcessor.Process(0.5f, out var regime), Is.GreaterThan(0f));
+            Assert.That(regime, Is.EqualTo(CameraScrollRegime.Transition));
+        }
+
+        [Test]
+        public void UnexpectedScrollValuesStayFiniteAndZoomLimitsHold()
+        {
+            Assert.That(CameraScrollProcessor.Process(float.NaN, out _), Is.Zero);
+            Assert.That(CameraScrollProcessor.Process(float.PositiveInfinity, out _), Is.Zero);
+            Assert.That(CameraScrollProcessor.Process(1000f, out _), Is.EqualTo(3f));
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+            for (int i = 0; i < 100; i++)
+                motion.Step(new CameraInput { Scroll = CameraScrollProcessor.Process(1f, out _) }, 0.016f, settings);
+            Assert.That(motion.Distance, Is.EqualTo(settings.zoomMinDistance));
+            for (int i = 0; i < 100; i++)
+                motion.Step(new CameraInput { Scroll = CameraScrollProcessor.Process(-1f, out _) }, 0.016f, settings);
+            Assert.That(motion.Distance, Is.EqualTo(settings.zoomMaxDistance));
+        }
+
         [Test]
         public void SpeedIncreasesWithDistance()
         {

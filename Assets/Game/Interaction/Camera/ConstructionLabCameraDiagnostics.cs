@@ -27,8 +27,8 @@ namespace Aedifica.Interaction.Camera
             GUILayout.Label($"Mouse Delta: X {read.MouseDelta.x:F3}   Y {read.MouseDelta.y:F3}");
             GUILayout.Label($"RotatePixels: X {read.Input.RotatePixels.x:F3}   Y {read.Input.RotatePixels.y:F3}");
             GUILayout.Label($"PanPixels: X {read.Input.PanPixels.x:F3}   Y {read.Input.PanPixels.y:F3}");
-            GUILayout.Label($"Raw Scroll Y: {read.RawScrollY:F4}   Normalized: {read.Input.Scroll:F4}");
-            GUILayout.Label($"Last nonzero scroll: raw {read.LastNonzeroRawScrollY:F4}   normalized {read.LastNonzeroNormalizedScroll:F4}");
+            GUILayout.Label($"Raw Scroll Y: {read.RawScrollY:F4}   Processed: {read.Input.Scroll:F4}   Regime: {read.ScrollRegime}");
+            GUILayout.Label($"Last nonzero scroll: raw {read.LastNonzeroRawScrollY:F4}   processed {read.LastNonzeroNormalizedScroll:F4}   {read.LastNonzeroScrollRegime}");
             GUILayout.Label($"Zoom Speed (runtime): {controller.DiagnosticZoomSpeed:F3}");
             GUILayout.Label($"Distance: {motion.Distance:F3}   Target: {motion.TargetDistance:F3}");
             GUILayout.Label($"Yaw: {motion.Yaw:F3}   Target: {motion.TargetYaw:F3}");
