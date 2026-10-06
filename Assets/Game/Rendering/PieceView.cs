@@ -9,7 +9,10 @@ namespace Aedifica.Rendering
     public sealed class PieceView : MonoBehaviour
     {
         public PieceId Id { get; private set; }
+        public MaterialId MaterialId { get; private set; }
         private PieceDimensions dimensions;
+        private MaterialRegistry materialRegistry;
+        private bool materialAssigned;
         private Mesh ownedMesh;
         private MeshFilter meshFilter;
         private MeshRenderer meshRenderer;
@@ -25,18 +28,27 @@ namespace Aedifica.Rendering
         }
 
         public void Initialize(PieceData piece, Material material)
+            => Initialize(piece, new MaterialRegistry(material));
+
+        public void Initialize(PieceData piece, MaterialRegistry registry)
         {
             if (piece == null) throw new ArgumentNullException(nameof(piece));
-            if (material == null) throw new ArgumentNullException(nameof(material));
+            if (registry == null) throw new ArgumentNullException(nameof(registry));
             if (Id.IsValid) throw new InvalidOperationException("PieceView is already initialized.");
             Id = piece.Id;
-            meshRenderer.sharedMaterial = material;
+            materialRegistry = registry;
             Refresh(piece);
         }
 
         public void Refresh(PieceData piece)
         {
             if (piece == null || piece.Id != Id) throw new ArgumentException("View and piece IDs must match.", nameof(piece));
+            if (!materialAssigned || MaterialId != piece.MaterialId)
+            {
+                meshRenderer.sharedMaterial = materialRegistry.Resolve(piece.MaterialId);
+                MaterialId = piece.MaterialId;
+                materialAssigned = true;
+            }
             if (ownedMesh == null || !dimensions.Equals(piece.Dimensions))
             {
                 Mesh replacement = BlockMeshFactory.Build(BlockGeometryGenerator.GeneratePiece(piece.Dimensions));

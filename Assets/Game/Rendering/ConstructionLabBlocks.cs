@@ -8,22 +8,34 @@ namespace Aedifica.Rendering
     public sealed class ConstructionLabBlocks : MonoBehaviour
     {
         [SerializeField] private Material sharedBlockMaterial;
+        [SerializeField] private Material stoneMaterial;
+        [SerializeField] private Material brickMaterial;
+        [SerializeField] private Material plasterMaterial;
+        [SerializeField] private bool logMissingMaterials;
 
         private ConstructionWorld world;
         private readonly Dictionary<PieceId, PieceView> views = new Dictionary<PieceId, PieceView>();
 
         public ConstructionWorld World => world;
         public Material SharedBlockMaterial => sharedBlockMaterial;
+        public MaterialRegistry Registry { get; private set; }
 
         public void ConfigureMaterial(Material material)
+            => ConfigureMaterials(material, null, null, null);
+
+        public void ConfigureMaterials(Material neutral, Material stone, Material brick, Material plaster)
         {
             if (world != null) throw new InvalidOperationException("Configure the lab before Awake.");
-            sharedBlockMaterial = material != null ? material : throw new ArgumentNullException(nameof(material));
+            sharedBlockMaterial = neutral != null ? neutral : throw new ArgumentNullException(nameof(neutral));
+            stoneMaterial = stone;
+            brickMaterial = brick;
+            plasterMaterial = plaster;
         }
 
         private void Awake()
         {
             if (sharedBlockMaterial == null) throw new InvalidOperationException("ConstructionLab requires a URP block material.");
+            Registry = new MaterialRegistry(sharedBlockMaterial, stoneMaterial, brickMaterial, plasterMaterial, logMissingMaterials);
             world = new ConstructionWorld();
             world.Add(new PieceData(PieceId.Parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
                 new PieceTransform(new Vector3(-5f, 0f, -4f), Quaternion.identity), new BlockDimensions(2f, 1f, 3f)));
@@ -32,18 +44,18 @@ namespace Aedifica.Rendering
             world.Add(new PieceData(PieceId.Parse("cccccccccccccccccccccccccccccccc"),
                 new PieceTransform(new Vector3(5f, 0f, -4f), Quaternion.identity), new BlockDimensions(4f, 0.5f, 2f)));
             world.Add(new PieceData(PieceId.Parse("dddddddddddddddddddddddddddddddd"),
-                new PieceTransform(new Vector3(0f, 0f, 6f), Quaternion.identity), new SlabDimensions(8f, 0.2f, 6f)));
+                new PieceTransform(new Vector3(0f, 0f, 6f), Quaternion.identity), new SlabDimensions(8f, 0.2f, 6f)).WithMaterial(LabMaterialIds.Plaster));
             world.Add(new PieceData(PieceId.Parse("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
-                new PieceTransform(new Vector3(0f, 0.2f, 8.7f), Quaternion.identity), new WallDimensions(8f, 3f, 0.3f)));
+                new PieceTransform(new Vector3(0f, 0.2f, 8.7f), Quaternion.identity), new WallDimensions(8f, 3f, 0.3f)).WithMaterial(LabMaterialIds.Stone));
             world.Add(new PieceData(PieceId.Parse("ffffffffffffffffffffffffffffffff"),
-                new PieceTransform(new Vector3(-3.7f, 0.2f, 6f), Quaternion.Euler(0f, 90f, 0f)), new WallDimensions(5.4f, 2.5f, 0.25f)));
+                new PieceTransform(new Vector3(-3.7f, 0.2f, 6f), Quaternion.Euler(0f, 90f, 0f)), new WallDimensions(5.4f, 2.5f, 0.25f)).WithMaterial(LabMaterialIds.Brick));
 
             foreach (PieceData piece in world.Pieces)
             {
                 var viewObject = new GameObject($"Lab {piece.Type} {piece.Id}");
                 viewObject.transform.SetParent(transform, false);
                 PieceView view = viewObject.AddComponent<PieceView>();
-                view.Initialize(piece, sharedBlockMaterial);
+                view.Initialize(piece, Registry);
                 views.Add(piece.Id, view);
             }
         }
@@ -60,6 +72,12 @@ namespace Aedifica.Rendering
             if (replacement == null || !world.Replace(replacement.Id, replacement)) return false;
             views[replacement.Id].Refresh(replacement);
             return true;
+        }
+
+        public bool CycleMaterial(PieceId id)
+        {
+            if (!world.TryGet(id, out PieceData piece)) return false;
+            return Apply(piece.WithMaterial(Registry.Next(piece.MaterialId)));
         }
     }
 }

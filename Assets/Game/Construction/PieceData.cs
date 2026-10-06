@@ -8,6 +8,7 @@ namespace Aedifica.Construction
         public PieceType Type { get; }
         public PieceTransform Transform { get; }
         public PieceDimensions Dimensions { get; }
+        public MaterialId MaterialId { get; }
         public BlockDimensions BlockDimensions => Dimensions.AsBlock();
         public WallDimensions WallDimensions => Dimensions.AsWall();
         public SlabDimensions SlabDimensions => Dimensions.AsSlab();
@@ -30,6 +31,9 @@ namespace Aedifica.Construction
         }
 
         public PieceData(PieceId id, PieceTransform transform, PieceDimensions dimensions)
+            : this(id, transform, dimensions, LabMaterialIds.Neutral) { }
+
+        public PieceData(PieceId id, PieceTransform transform, PieceDimensions dimensions, MaterialId materialId)
         {
             if (!id.IsValid) throw new ArgumentException("A piece must have a valid ID.", nameof(id));
             if (!transform.IsValid) throw new ArgumentException("A piece must have a valid transform.", nameof(transform));
@@ -38,14 +42,16 @@ namespace Aedifica.Construction
             Type = dimensions.Type;
             Transform = transform;
             Dimensions = dimensions;
+            MaterialId = materialId;
         }
 
-        public PieceData WithTransform(PieceTransform transform) => new PieceData(Id, transform, Dimensions);
+        public PieceData WithTransform(PieceTransform transform) => new PieceData(Id, transform, Dimensions, MaterialId);
         public PieceData WithDimensions(PieceDimensions dimensions)
         {
             if (dimensions.Type != Type) throw new ArgumentException("Replacement parameters must preserve piece type.", nameof(dimensions));
-            return new PieceData(Id, Transform, dimensions);
+            return new PieceData(Id, Transform, dimensions, MaterialId);
         }
+        public PieceData WithMaterial(MaterialId materialId) => new PieceData(Id, Transform, Dimensions, materialId);
         public PieceData WithBlockDimensions(BlockDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithWallDimensions(WallDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithSlabDimensions(SlabDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
