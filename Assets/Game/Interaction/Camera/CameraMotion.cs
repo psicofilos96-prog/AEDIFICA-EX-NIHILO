@@ -8,6 +8,8 @@ namespace Aedifica.Interaction.Camera
         public float Yaw { get; private set; }
         public float Pitch { get; private set; }
         public float Distance { get; private set; }
+        public bool IsOrbiting { get; private set; }
+        public Vector3 OrbitPivot { get; private set; }
 
         private Vector3 targetFocus;
         private float targetYaw;
@@ -21,7 +23,28 @@ namespace Aedifica.Interaction.Camera
             targetFocus = Focus + worldDelta;
         }
 
-        public void SettleFocus() => targetFocus = Focus;
+        public void BeginOrbit(Vector3 pivot, CameraSettings settings)
+        {
+            Vector3 offset = pivot - Position;
+            float distance = offset.magnitude;
+            if (distance < 0.001f) return;
+            Vector3 forward = offset / distance;
+            OrbitPivot = Focus = targetFocus = pivot;
+            Distance = targetDistance = distance;
+            Yaw = targetYaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+            Pitch = targetPitch = Mathf.Clamp(-Mathf.Asin(forward.y) * Mathf.Rad2Deg,
+                settings.pitchMin, settings.pitchMax);
+            IsOrbiting = true;
+        }
+
+        public void EndOrbit()
+        {
+            IsOrbiting = false;
+            targetFocus = Focus;
+            targetDistance = Distance;
+            targetYaw = Yaw;
+            targetPitch = Pitch;
+        }
 
         public static Vector3 GrabCorrection(Vector3 grabbedPoint, Vector3 currentPoint) => grabbedPoint - currentPoint;
 
@@ -58,12 +81,17 @@ namespace Aedifica.Interaction.Camera
             input.KeyboardYaw = Safe(input.KeyboardYaw);
             input.Scroll = Safe(input.Scroll);
             if (float.IsNaN(deltaTime) || float.IsInfinity(deltaTime) || deltaTime < 0f) return;
-            targetYaw += input.KeyboardYaw * settings.keyboardYawSpeed * deltaTime + input.RotatePixels.x * settings.yawSpeed;
-            targetPitch = Mathf.Clamp(targetPitch - input.RotatePixels.y * settings.pitchSpeed, settings.pitchMin, settings.pitchMax);
-            targetDistance = Mathf.Clamp(targetDistance * Mathf.Exp(-input.Scroll * settings.zoomSpeed), settings.zoomMinDistance, settings.zoomMaxDistance);
-            float speed = MoveSpeed(targetDistance, settings);
-            targetFocus += HorizontalMove(input.Move, targetYaw) * speed * deltaTime;
-            float blend = settings.smoothing == 0f ? 1f : 1f - Mathf.Exp(-settings.smoothing * deltaTime);
+            float yawSensitivity = IsOrbiting ? settings.orbitYawSensitivity * (settings.invertHorizontal ? -1f : 1f) : settings.yawSpeed;
+            float pitchSensitivity = IsOrbiting ? settings.orbitPitchSensitivity * (settings.invertVertical ? -1f : 1f) : settings.pitchSpeed;
+            targetYaw += input.KeyboardYaw * settings.keyboardYawSpeed * deltaTime + input.RotatePixels.x * yawSensitivity;
+            targetPitch = Mathf.Clamp(targetPitch - input.RotatePixels.y * pitchSensitivity, settings.pitchMin, settings.pitchMax);
+            if (!IsOrbiting)
+            {
+                targetDistance = Mathf.Clamp(targetDistance * Mathf.Exp(-input.Scroll * settings.zoomSpeed), settings.zoomMinDistance, settings.zoomMaxDistance);
+                float speed = MoveSpeed(targetDistance, settings);
+                targetFocus += HorizontalMove(input.Move, targetYaw) * speed * deltaTime;
+            }
+            float blend = IsOrbiting || settings.smoothing == 0f ? 1f : 1f - Mathf.Exp(-settings.smoothing * deltaTime);
             Focus = Vector3.Lerp(Focus, targetFocus, blend);
             Yaw = Mathf.LerpAngle(Yaw, targetYaw, blend);
             Pitch = Mathf.Lerp(Pitch, targetPitch, blend);

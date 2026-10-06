@@ -13,6 +13,10 @@ namespace Aedifica.Interaction.Camera
         public float zoomMaxDistance = 400f;
         public float yawSpeed = 0.2f;
         public float pitchSpeed = 0.2f;
+        public float orbitYawSensitivity = 0.2f;
+        public float orbitPitchSensitivity = 0.2f;
+        public bool invertHorizontal;
+        public bool invertVertical;
         public float keyboardYawSpeed = 90f;
         public float pitchMin = 15f;
         public float pitchMax = 80f;
@@ -28,6 +32,8 @@ namespace Aedifica.Interaction.Camera
             zoomMaxDistance = Mathf.Max(zoomMinDistance, Positive(zoomMaxDistance, 400f));
             yawSpeed = Positive(yawSpeed, 0.2f);
             pitchSpeed = Positive(pitchSpeed, 0.2f);
+            orbitYawSensitivity = orbitYawSensitivity <= 0f ? 0.2f : Positive(orbitYawSensitivity, 0.2f);
+            orbitPitchSensitivity = orbitPitchSensitivity <= 0f ? 0.2f : Positive(orbitPitchSensitivity, 0.2f);
             keyboardYawSpeed = Positive(keyboardYawSpeed, 90f);
             pitchMin = Mathf.Clamp(Finite(pitchMin, 15f), 1f, 88f);
             pitchMax = Mathf.Clamp(Finite(pitchMax, 80f), pitchMin, 89f);
