@@ -13,6 +13,7 @@ namespace Aedifica.Interaction.Camera
         [SerializeField] private float initialDistance = 25f;
 
         private CameraMotion motion;
+        private UnityEngine.Camera sceneCamera;
         private bool panSuppressed;
 
         public void SetPanSuppressed(bool suppressed) => panSuppressed = suppressed;
@@ -21,6 +22,7 @@ namespace Aedifica.Interaction.Camera
 
         private void Awake()
         {
+            sceneCamera = GetComponent<UnityEngine.Camera>();
             settings ??= new CameraSettings();
             motion = new CameraMotion(initialFocus, initialYaw, initialPitch, initialDistance, settings);
             ApplyTransform();
@@ -37,6 +39,8 @@ namespace Aedifica.Interaction.Camera
         {
             CameraInput input = CameraInputReader.Read();
             if (panSuppressed) input.PanPixels = Vector2.zero;
+            input.PanFieldOfView = sceneCamera.fieldOfView;
+            input.PanPixelHeight = sceneCamera.pixelHeight;
             motion.Step(input, Time.unscaledDeltaTime, settings);
             ApplyTransform();
         }

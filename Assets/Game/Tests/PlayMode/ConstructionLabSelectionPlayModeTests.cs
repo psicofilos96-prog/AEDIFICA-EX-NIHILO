@@ -46,6 +46,21 @@ namespace Aedifica.Tests.PlayMode
                 interaction.PointerDown(pointer);
                 interaction.PointerUp(pointer);
                 Assert.That(interaction.SelectedPieceId, Is.EqualTo(id));
+                var gizmoObject = new GameObject("Test Rotation Gizmo");
+                try
+                {
+                    var gizmo = gizmoObject.AddComponent<RuntimeGizmo>();
+                    gizmo.Initialize(camera, material);
+                    gizmo.Show(piece, ManipulationMode.Rotate);
+                    GizmoHandle rotate = gizmo.GetComponentInChildren<GizmoHandle>();
+                    Assert.That(rotate, Is.Not.Null);
+                    Assert.That(rotate.Mode, Is.EqualTo(ManipulationMode.Rotate));
+                    Assert.That(rotate.Axis, Is.EqualTo(ManipulationAxis.Y));
+                    Assert.That(rotate.gameObject.activeInHierarchy, Is.True);
+                    Assert.That(rotate.GetComponent<Collider>().enabled, Is.True);
+                    Assert.That(gizmo.GetComponent<LineRenderer>().enabled, Is.True);
+                }
+                finally { Object.DestroyImmediate(gizmoObject); }
             }
             finally
             {

@@ -125,6 +125,26 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
+        public void GroundPanTracksBothScreenAxesAndCameraYaw()
+        {
+            Vector3 rightAndUp = CameraMotion.GroundPan(new Vector2(100f, 100f), 0f, 45f, 25f, 60f, 600f, 0.002f);
+            Assert.That(rightAndUp.x, Is.EqualTo(-5f).Within(0.001f));
+            Assert.That(rightAndUp.z, Is.EqualTo(-5f / Mathf.Sin(45f * Mathf.Deg2Rad)).Within(0.001f));
+            Assert.That(rightAndUp.y, Is.Zero);
+            Vector3 turned = CameraMotion.GroundPan(new Vector2(100f, 100f), 90f, 45f, 25f, 60f, 600f, 0.002f);
+            Assert.That(turned.x, Is.EqualTo(rightAndUp.z).Within(0.001f));
+            Assert.That(turned.z, Is.EqualTo(-rightAndUp.x).Within(0.001f));
+        }
+
+        [Test]
+        public void GroundPanAccountsForViewportHeightWithoutChangingBaseline()
+        {
+            Vector3 baseline = CameraMotion.GroundPan(Vector2.right * 100f, 0f, 45f, 25f, 60f, 600f, 0.002f);
+            Vector3 doublePixels = CameraMotion.GroundPan(Vector2.right * 200f, 0f, 45f, 25f, 60f, 1200f, 0.002f);
+            Assert.That(doublePixels.x, Is.EqualTo(baseline.x).Within(0.001f));
+        }
+
+        [Test]
         public void InvalidSettingsAndInputRemainFinite()
         {
             var settings = new CameraSettings { zoomMinDistance = float.NaN, zoomMaxDistance = float.NegativeInfinity,

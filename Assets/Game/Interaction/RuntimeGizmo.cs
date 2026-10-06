@@ -7,6 +7,7 @@ namespace Aedifica.Interaction
     {
         private readonly GizmoHandle[,] handles = new GizmoHandle[3, 3];
         private UnityEngine.Camera sceneCamera;
+        private LineRenderer rotationRing;
 
         public void Initialize(UnityEngine.Camera camera, Material material)
         {
@@ -15,6 +16,15 @@ namespace Aedifica.Interaction
             CreateHandle(ManipulationMode.Move, ManipulationAxis.Y, PrimitiveType.Cube, Color.green, material);
             CreateHandle(ManipulationMode.Move, ManipulationAxis.Z, PrimitiveType.Cube, Color.blue, material);
             CreateHandle(ManipulationMode.Rotate, ManipulationAxis.Y, PrimitiveType.Sphere, Color.yellow, material);
+            rotationRing = gameObject.AddComponent<LineRenderer>();
+            rotationRing.sharedMaterial = material;
+            rotationRing.useWorldSpace = false;
+            rotationRing.loop = true;
+            rotationRing.positionCount = 48;
+            rotationRing.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var ringColor = new MaterialPropertyBlock();
+            ringColor.SetColor("_BaseColor", Color.yellow);
+            rotationRing.SetPropertyBlock(ringColor);
             CreateHandle(ManipulationMode.Resize, ManipulationAxis.X, PrimitiveType.Cube, Color.red, material);
             CreateHandle(ManipulationMode.Resize, ManipulationAxis.Y, PrimitiveType.Cube, Color.green, material);
             CreateHandle(ManipulationMode.Resize, ManipulationAxis.Z, PrimitiveType.Cube, Color.blue, material);
@@ -63,7 +73,23 @@ namespace Aedifica.Interaction
                 for (int axis = 0; axis < 3; axis++)
                     if (handles[(int)mode, axis] != null)
                         handles[(int)mode, axis].transform.localPosition = ManipulationSession.AxisVector((ManipulationAxis)axis) * reach;
+                if (mode == ManipulationMode.Rotate)
+                {
+                    // The ring shows the Y rotation plane; the camera-facing sphere is its hit target.
+                    Vector3 towardCamera = sceneCamera.transform.position - transform.position;
+                    towardCamera.y = 0f;
+                    towardCamera = towardCamera.sqrMagnitude > 0.001f ? towardCamera.normalized : Vector3.back;
+                    handles[(int)mode, (int)ManipulationAxis.Y].transform.localPosition = towardCamera * reach;
+                    handles[(int)mode, (int)ManipulationAxis.Y].transform.localScale = Vector3.one * 0.65f;
+                    rotationRing.widthMultiplier = 0.08f;
+                    for (int i = 0; i < rotationRing.positionCount; i++)
+                    {
+                        float angle = i * Mathf.PI * 2f / rotationRing.positionCount;
+                        rotationRing.SetPosition(i, new Vector3(Mathf.Cos(angle) * reach, 0f, Mathf.Sin(angle) * reach));
+                    }
+                }
             }
+            rotationRing.enabled = mode == ManipulationMode.Rotate;
         }
 
         public void Hide() => gameObject.SetActive(false);

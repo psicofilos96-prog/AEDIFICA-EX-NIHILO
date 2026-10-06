@@ -845,7 +845,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   sceneCamera: {fileID: 330585545}
   cityCamera: {fileID: 330585548}
-  debugSelection: 1
+  debugSelection: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

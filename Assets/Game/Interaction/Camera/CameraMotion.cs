@@ -52,14 +52,27 @@ namespace Aedifica.Interaction.Camera
             targetDistance = Mathf.Clamp(targetDistance * Mathf.Exp(-input.Scroll * settings.zoomSpeed), settings.zoomMinDistance, settings.zoomMaxDistance);
             float speed = MoveSpeed(targetDistance, settings);
             targetFocus += HorizontalMove(input.Move, targetYaw) * speed * deltaTime;
-            var rotation = Quaternion.Euler(0f, targetYaw, 0f);
-            Vector3 pan = rotation * new Vector3(-input.PanPixels.x, 0f, -input.PanPixels.y);
-            targetFocus += pan * (settings.panSpeed * targetDistance);
+            float fieldOfView = input.PanFieldOfView > 0f ? input.PanFieldOfView : 60f;
+            float pixelHeight = input.PanPixelHeight > 0f ? input.PanPixelHeight : 600f;
+            targetFocus += GroundPan(input.PanPixels, targetYaw, targetPitch, targetDistance,
+                fieldOfView, pixelHeight, settings.panSpeed);
             float blend = settings.smoothing == 0f ? 1f : 1f - Mathf.Exp(-settings.smoothing * deltaTime);
             Focus = Vector3.Lerp(Focus, targetFocus, blend);
             Yaw = Mathf.LerpAngle(Yaw, targetYaw, blend);
             Pitch = Mathf.Lerp(Pitch, targetPitch, blend);
             Distance = Mathf.Lerp(Distance, targetDistance, blend);
+        }
+
+        public static Vector3 GroundPan(Vector2 pixels, float yaw, float pitch, float distance,
+            float fieldOfView, float pixelHeight, float panSpeed)
+        {
+            if (pixels == Vector2.zero || pixelHeight <= 0f) return Vector3.zero;
+            // Keep the approved 600 px / 60 degree baseline while accounting for the actual viewport.
+            float baseline = 2f * Mathf.Tan(30f * Mathf.Deg2Rad) / 600f;
+            float metersPerPixel = 2f * distance * Mathf.Tan(fieldOfView * 0.5f * Mathf.Deg2Rad) / pixelHeight;
+            float scale = metersPerPixel * panSpeed / baseline;
+            float groundVertical = -pixels.y / Mathf.Max(0.1f, Mathf.Sin(pitch * Mathf.Deg2Rad));
+            return Quaternion.Euler(0f, yaw, 0f) * new Vector3(-pixels.x, 0f, groundVertical) * scale;
         }
 
         public Vector3 Position => Focus - Quaternion.Euler(Pitch, Yaw, 0f) * Vector3.forward * Distance;
