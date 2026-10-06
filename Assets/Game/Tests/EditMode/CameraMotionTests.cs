@@ -45,15 +45,25 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
-        public void RotationCaptureDiscardsCursorWarpBeforeReadingUserDrag()
+        public void RotationCaptureWaitsForStableLockRegardlessOfWarpDuration()
         {
             var filter = new RotationCaptureFilter();
+            Vector2 center = new Vector2(400f, 300f);
             filter.BeginCapture();
-            Assert.That(filter.Filter(new Vector2(390f, -170f)), Is.EqualTo(Vector2.zero));
-            Assert.That(filter.Filter(new Vector2(-380f, 160f)), Is.EqualTo(Vector2.zero));
-            Assert.That(filter.Filter(new Vector2(20f, -10f)), Is.EqualTo(new Vector2(20f, -10f)));
+            foreach (int frames in new[] { 1, 2, 5, 12 })
+            {
+                filter.BeginCapture();
+                for (int i = 0; i < frames; i++)
+                    Assert.That(filter.Filter(new Vector2(-50f, 23f), center, center, true), Is.EqualTo(Vector2.zero));
+                Assert.That(filter.Filter(Vector2.zero, center, center, true), Is.EqualTo(Vector2.zero));
+                Assert.That(filter.Filter(new Vector2(20f, -10f), center, center, true), Is.EqualTo(new Vector2(20f, -10f)));
+                filter.Reset();
+            }
+            Assert.That(filter.Filter(new Vector2(20f, -10f), center, center, false), Is.EqualTo(Vector2.zero));
+            Assert.That(filter.Filter(Vector2.zero, center, center, true), Is.EqualTo(Vector2.zero));
+            Assert.That(filter.Filter(Vector2.right, center, center, true), Is.EqualTo(Vector2.right));
             filter.Reset();
-            Assert.That(filter.Filter(Vector2.right), Is.EqualTo(Vector2.right));
+            Assert.That(filter.Filter(Vector2.right, center, center, true), Is.EqualTo(Vector2.zero));
         }
 
         [Test]
@@ -65,8 +75,8 @@ namespace Aedifica.Tests.EditMode
                 var camera = cameraObject.AddComponent<UnityEngine.Camera>();
                 camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
                 var settings = new CameraSettings();
-                var starts = new[] { new Vector2(400f, 300f), new Vector2(30f, 300f),
-                    new Vector2(770f, 300f), new Vector2(790f, 20f) };
+                var starts = new[] { new Vector2(400f, 300f), new Vector2(0f, 0f),
+                    new Vector2(800f, 0f), new Vector2(0f, 600f), new Vector2(800f, 600f) };
                 Vector3? firstPivot = null;
                 Vector3? firstResult = null;
                 foreach (Vector2 start in starts)
@@ -81,9 +91,15 @@ namespace Aedifica.Tests.EditMode
                     var filter = new RotationCaptureFilter();
                     filter.BeginCapture();
                     Vector2 cursorWarp = new Vector2(400f, 300f) - start;
-                    motion.Step(new CameraInput { RotatePixels = filter.Filter(cursorWarp) }, 0.016f, settings);
-                    motion.Step(new CameraInput { RotatePixels = filter.Filter(cursorWarp) }, 0.016f, settings);
-                    motion.Step(new CameraInput { RotatePixels = filter.Filter(new Vector2(20f, -10f)) }, 0.016f, settings);
+                    for (int i = 0; i < 4; i++)
+                        motion.Step(new CameraInput { RotatePixels = filter.Filter(cursorWarp, new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
+                    Assert.That(motion.Focus, Is.EqualTo(pivot));
+                    float yawBeforeDrag = motion.Yaw;
+                    float pitchBeforeDrag = motion.Pitch;
+                    motion.Step(new CameraInput { RotatePixels = filter.Filter(Vector2.zero, new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
+                    Assert.That(motion.Yaw, Is.EqualTo(yawBeforeDrag));
+                    Assert.That(motion.Pitch, Is.EqualTo(pitchBeforeDrag));
+                    motion.Step(new CameraInput { RotatePixels = filter.Filter(new Vector2(20f, -10f), new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
                     if (firstPivot.HasValue)
                     {
                         Assert.That(Vector3.Distance(pivot, firstPivot.Value), Is.LessThan(0.0001f));

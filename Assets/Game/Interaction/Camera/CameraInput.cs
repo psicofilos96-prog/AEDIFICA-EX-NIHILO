@@ -42,7 +42,10 @@ namespace Aedifica.Interaction.Camera
                 rawScroll = mouse.scroll.ReadValue().y;
                 input.Scroll = CameraScrollProcessor.Process(rawScroll, out scrollRegime);
                 Vector2 delta = mouse.delta.ReadValue();
-                if (rightPressed) delta = rotationCaptureFilter.Filter(delta);
+                if (rightPressed)
+                    delta = rotationCaptureFilter.Filter(delta, mouse.position.ReadValue(),
+                        new Vector2(Screen.width * 0.5f, Screen.height * 0.5f),
+                        Cursor.lockState == CursorLockMode.Locked);
                 AssignMouseDrag(ref input, rightPressed, leftPressed, delta);
             }
             else ReleaseRotationCapture();
@@ -83,18 +86,25 @@ namespace Aedifica.Interaction.Camera
 
     public struct RotationCaptureFilter
     {
-        private int framesToIgnore;
+        private bool awaitingStableLock;
 
-        // Cursor locking can recenter the pointer and report that warp as mouse delta.
-        public void BeginCapture() => framesToIgnore = 2;
+        // The lock/recenter transition has no fixed frame duration. Arm rotation only
+        // after the locked cursor has settled at the viewport center with zero delta.
+        public void BeginCapture() => awaitingStableLock = true;
 
-        public Vector2 Filter(Vector2 delta)
+        public Vector2 Filter(Vector2 delta, Vector2 position, Vector2 center, bool locked)
         {
-            if (framesToIgnore <= 0) return delta;
-            framesToIgnore--;
+            if (!locked)
+            {
+                awaitingStableLock = true;
+                return Vector2.zero;
+            }
+            if (!awaitingStableLock) return delta;
+            if ((position - center).sqrMagnitude <= 1f && delta.sqrMagnitude <= 0.0001f)
+                awaitingStableLock = false;
             return Vector2.zero;
         }
 
-        public void Reset() => framesToIgnore = 0;
+        public void Reset() => awaitingStableLock = true;
     }
 }

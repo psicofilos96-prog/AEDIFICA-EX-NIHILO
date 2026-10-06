@@ -29,7 +29,8 @@ namespace Aedifica.Interaction.Camera
 
         public bool BeginWorldGrab(Vector2 pointer)
         {
-            if (motion.IsOrbiting) return false;
+            if (motion.IsOrbiting || Cursor.lockState == CursorLockMode.Locked ||
+                Mouse.current != null && Mouse.current.rightButton.isPressed) return false;
             grabPlane = new Plane(Vector3.up, new Vector3(0f, motion.Focus.y, 0f));
             worldGrabActive = TryGroundPoint(sceneCamera.ScreenPointToRay(pointer), grabPlane, out grabbedPoint);
             return worldGrabActive;
@@ -37,7 +38,8 @@ namespace Aedifica.Interaction.Camera
 
         public void DragWorld(Vector2 pointer)
         {
-            if (!worldGrabActive || panSuppressed || motion.IsOrbiting) return;
+            if (!worldGrabActive || panSuppressed || motion.IsOrbiting || Cursor.lockState == CursorLockMode.Locked ||
+                Mouse.current != null && Mouse.current.rightButton.isPressed) return;
             if (TryGroundPoint(sceneCamera.ScreenPointToRay(pointer), grabPlane, out Vector3 currentPoint))
                 motion.ShiftFocus(CameraMotion.GrabCorrection(grabbedPoint, currentPoint));
         }

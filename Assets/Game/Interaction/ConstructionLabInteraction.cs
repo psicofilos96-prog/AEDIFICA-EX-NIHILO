@@ -78,6 +78,12 @@ namespace Aedifica.Interaction
 
             Mouse mouse = Mouse.current;
             if (mouse == null) return;
+            bool cursorUnavailableForPan = mouse.rightButton.isPressed || Cursor.lockState == CursorLockMode.Locked;
+            if (cursorUnavailableForPan && draggingWorld)
+            {
+                cityCamera.EndWorldGrab();
+                draggingWorld = false;
+            }
             Vector2 pointer = mouse.position.ReadValue();
             if (debugSelection && mouse.leftButton.isPressed != lastObservedLeftPressed)
                 Debug.Log($"Selection LMB state: pressed={mouse.leftButton.isPressed}, wasPressed={mouse.leftButton.wasPressedThisFrame}, wasReleased={mouse.leftButton.wasReleasedThisFrame}, pointer={pointer}", this);
@@ -88,7 +94,7 @@ namespace Aedifica.Interaction
                 PointerDown(pointer);
             }
             if (session != null && (mouse.leftButton.isPressed || mouse.leftButton.wasReleasedThisFrame)) UpdateManipulation(pointer);
-            else if (mouse.leftButton.isPressed && !IsClick(pressPosition, pointer))
+            else if (mouse.leftButton.isPressed && !cursorUnavailableForPan && !IsClick(pressPosition, pointer))
             {
                 if (!draggingWorld)
                 {
