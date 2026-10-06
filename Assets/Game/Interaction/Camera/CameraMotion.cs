@@ -14,6 +14,17 @@ namespace Aedifica.Interaction.Camera
         private float targetPitch;
         private float targetDistance;
 
+        public void ShiftFocus(Vector3 worldDelta)
+        {
+            if (float.IsNaN(worldDelta.x) || float.IsNaN(worldDelta.y) || float.IsNaN(worldDelta.z) ||
+                float.IsInfinity(worldDelta.x) || float.IsInfinity(worldDelta.y) || float.IsInfinity(worldDelta.z)) return;
+            targetFocus = Focus + worldDelta;
+        }
+
+        public void SettleFocus() => targetFocus = Focus;
+
+        public static Vector3 GrabCorrection(Vector3 grabbedPoint, Vector3 currentPoint) => grabbedPoint - currentPoint;
+
         public CameraMotion(Vector3 focus, float yaw, float pitch, float distance, CameraSettings settings)
         {
             settings.Normalize();
@@ -52,10 +63,6 @@ namespace Aedifica.Interaction.Camera
             targetDistance = Mathf.Clamp(targetDistance * Mathf.Exp(-input.Scroll * settings.zoomSpeed), settings.zoomMinDistance, settings.zoomMaxDistance);
             float speed = MoveSpeed(targetDistance, settings);
             targetFocus += HorizontalMove(input.Move, targetYaw) * speed * deltaTime;
-            float fieldOfView = input.PanFieldOfView > 0f ? input.PanFieldOfView : 60f;
-            float pixelHeight = input.PanPixelHeight > 0f ? input.PanPixelHeight : 600f;
-            targetFocus += GroundPan(input.PanPixels, targetYaw, targetPitch, targetDistance,
-                fieldOfView, pixelHeight, settings.panSpeed);
             float blend = settings.smoothing == 0f ? 1f : 1f - Mathf.Exp(-settings.smoothing * deltaTime);
             Focus = Vector3.Lerp(Focus, targetFocus, blend);
             Yaw = Mathf.LerpAngle(Yaw, targetYaw, blend);
@@ -63,17 +70,6 @@ namespace Aedifica.Interaction.Camera
             Distance = Mathf.Lerp(Distance, targetDistance, blend);
         }
 
-        public static Vector3 GroundPan(Vector2 pixels, float yaw, float pitch, float distance,
-            float fieldOfView, float pixelHeight, float panSpeed)
-        {
-            if (pixels == Vector2.zero || pixelHeight <= 0f) return Vector3.zero;
-            // Keep the approved 600 px / 60 degree baseline while accounting for the actual viewport.
-            float baseline = 2f * Mathf.Tan(30f * Mathf.Deg2Rad) / 600f;
-            float metersPerPixel = 2f * distance * Mathf.Tan(fieldOfView * 0.5f * Mathf.Deg2Rad) / pixelHeight;
-            float scale = metersPerPixel * panSpeed / baseline;
-            float groundVertical = -pixels.y / Mathf.Max(0.1f, Mathf.Sin(pitch * Mathf.Deg2Rad));
-            return Quaternion.Euler(0f, yaw, 0f) * new Vector3(-pixels.x, 0f, groundVertical) * scale;
-        }
 
         public Vector3 Position => Focus - Quaternion.Euler(Pitch, Yaw, 0f) * Vector3.forward * Distance;
         public Quaternion Rotation => Quaternion.Euler(Pitch, Yaw, 0f);

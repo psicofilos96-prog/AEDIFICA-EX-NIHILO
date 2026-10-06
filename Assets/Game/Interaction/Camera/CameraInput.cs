@@ -10,8 +10,6 @@ namespace Aedifica.Interaction.Camera
         public float Scroll;
         public Vector2 RotatePixels;
         public Vector2 PanPixels;
-        public float PanFieldOfView;
-        public float PanPixelHeight;
     }
 
     public static class CameraInputReader

@@ -124,24 +124,33 @@ namespace Aedifica.Tests.EditMode
             Assert.That(direction.x, Is.EqualTo(1f).Within(0.0001f));
         }
 
-        [Test]
-        public void GroundPanTracksBothScreenAxesAndCameraYaw()
+        [TestCase(2f, 0f)]
+        [TestCase(0f, 3f)]
+        [TestCase(2f, 3f)]
+        public void WorldGrabCorrectionKeepsInitialGroundPointUnderCursor(float x, float z)
         {
-            Vector3 rightAndUp = CameraMotion.GroundPan(new Vector2(100f, 100f), 0f, 45f, 25f, 60f, 600f, 0.002f);
-            Assert.That(rightAndUp.x, Is.EqualTo(-5f).Within(0.001f));
-            Assert.That(rightAndUp.z, Is.EqualTo(-5f / Mathf.Sin(45f * Mathf.Deg2Rad)).Within(0.001f));
-            Assert.That(rightAndUp.y, Is.Zero);
-            Vector3 turned = CameraMotion.GroundPan(new Vector2(100f, 100f), 90f, 45f, 25f, 60f, 600f, 0.002f);
-            Assert.That(turned.x, Is.EqualTo(rightAndUp.z).Within(0.001f));
-            Assert.That(turned.z, Is.EqualTo(-rightAndUp.x).Within(0.001f));
+            var plane = new Plane(Vector3.up, Vector3.zero);
+            var first = new Ray(new Vector3(0f, 10f, 0f), Vector3.down);
+            var next = new Ray(new Vector3(x, 10f, z), Vector3.down);
+            Assert.That(CityBuilderCamera.TryGroundPoint(first, plane, out Vector3 grabbed), Is.True);
+            Assert.That(CityBuilderCamera.TryGroundPoint(next, plane, out Vector3 current), Is.True);
+            Assert.That(CameraMotion.GrabCorrection(grabbed, current), Is.EqualTo(new Vector3(-x, 0f, -z)));
         }
 
-        [Test]
-        public void GroundPanAccountsForViewportHeightWithoutChangingBaseline()
+        [TestCase(0f, 45f)]
+        [TestCase(90f, 45f)]
+        [TestCase(45f, 70f)]
+        public void OrbitChangesPositionAroundFixedFocus(float yaw, float pitch)
         {
-            Vector3 baseline = CameraMotion.GroundPan(Vector2.right * 100f, 0f, 45f, 25f, 60f, 600f, 0.002f);
-            Vector3 doublePixels = CameraMotion.GroundPan(Vector2.right * 200f, 0f, 45f, 25f, 60f, 1200f, 0.002f);
-            Assert.That(doublePixels.x, Is.EqualTo(baseline.x).Within(0.001f));
+            var settings = new CameraSettings { smoothing = 0f };
+            var focus = new Vector3(3f, 0f, -2f);
+            var motion = new CameraMotion(focus, 0f, 45f, 25f, settings);
+            motion.Step(new CameraInput { RotatePixels = new Vector2(yaw / settings.yawSpeed,
+                (45f - pitch) / settings.pitchSpeed) }, 0.016f, settings);
+            Assert.That(motion.Focus, Is.EqualTo(focus));
+            Assert.That(motion.Distance, Is.EqualTo(25f));
+            Assert.That((motion.Position - focus).magnitude, Is.EqualTo(25f).Within(0.001f));
+            Assert.That(motion.Rotation.eulerAngles.z, Is.EqualTo(0f).Within(0.001f));
         }
 
         [Test]

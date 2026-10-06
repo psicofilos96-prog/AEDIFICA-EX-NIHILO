@@ -21,6 +21,7 @@ namespace Aedifica.Interaction
         [SerializeField] private bool debugSelection;
 
         public PieceId? SelectedPieceId => selection.SelectedPieceId;
+        public ManipulationMode Mode => mode;
 
         public void Configure(UnityEngine.Camera camera, CityBuilderCamera controller)
         {
@@ -36,6 +37,7 @@ namespace Aedifica.Interaction
         private ManipulationSession session;
         private PieceId? pressedPieceId;
         private Vector2 pressPosition;
+        private bool draggingWorld;
         private bool lastObservedLeftPressed;
 
         private void Awake()
@@ -62,9 +64,9 @@ namespace Aedifica.Interaction
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && session == null)
             {
-                if (keyboard.digit1Key.wasPressedThisFrame) mode = ManipulationMode.Move;
-                if (keyboard.digit2Key.wasPressedThisFrame) mode = ManipulationMode.Rotate;
-                if (keyboard.digit3Key.wasPressedThisFrame) mode = ManipulationMode.Resize;
+                if (keyboard.digit1Key.wasPressedThisFrame || keyboard.numpad1Key.wasPressedThisFrame) mode = ManipulationMode.Move;
+                if (keyboard.digit2Key.wasPressedThisFrame || keyboard.numpad2Key.wasPressedThisFrame) mode = ManipulationMode.Rotate;
+                if (keyboard.digit3Key.wasPressedThisFrame || keyboard.numpad3Key.wasPressedThisFrame) mode = ManipulationMode.Resize;
             }
 
             Mouse mouse = Mouse.current;
@@ -79,6 +81,14 @@ namespace Aedifica.Interaction
                 PointerDown(pointer);
             }
             if (session != null && (mouse.leftButton.isPressed || mouse.leftButton.wasReleasedThisFrame)) UpdateManipulation(pointer);
+            else if (mouse.leftButton.isPressed && !IsClick(pressPosition, pointer))
+            {
+                if (!draggingWorld)
+                {
+                    draggingWorld = cityCamera.BeginWorldGrab(pressPosition);
+                }
+                if (draggingWorld) cityCamera.DragWorld(pointer);
+            }
             if (mouse.leftButton.wasReleasedThisFrame) PointerUp(pointer);
 
             if (selection.SelectedPieceId is PieceId id && lab.World.TryGet(id, out PieceData piece)) gizmo.Show(piece, mode);
@@ -88,6 +98,7 @@ namespace Aedifica.Interaction
         public void PointerDown(Vector2 pointer)
         {
             pressPosition = pointer;
+            draggingWorld = false;
             pressedPieceId = null;
             PickResult picked = Pick(pointer);
             GizmoHandle nearestHandle = picked.Handle;
@@ -189,6 +200,8 @@ namespace Aedifica.Interaction
 
         public void PointerUp(Vector2 pointer)
         {
+            cityCamera.EndWorldGrab();
+            draggingWorld = false;
             if (session != null)
             {
                 EndManipulation();
@@ -223,7 +236,11 @@ namespace Aedifica.Interaction
         private void EndManipulation()
         {
             session = null;
-            if (cityCamera != null) cityCamera.SetPanSuppressed(false);
+            if (cityCamera != null)
+            {
+                cityCamera.EndWorldGrab();
+                cityCamera.SetPanSuppressed(false);
+            }
         }
 
         private void OnDestroy()

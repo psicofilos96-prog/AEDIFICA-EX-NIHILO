@@ -7,7 +7,7 @@ namespace Aedifica.Interaction
     {
         private readonly GizmoHandle[,] handles = new GizmoHandle[3, 3];
         private UnityEngine.Camera sceneCamera;
-        private LineRenderer rotationRing;
+        private readonly GizmoHandle[] rotationSegments = new GizmoHandle[24];
 
         public void Initialize(UnityEngine.Camera camera, Material material)
         {
@@ -16,15 +16,18 @@ namespace Aedifica.Interaction
             CreateHandle(ManipulationMode.Move, ManipulationAxis.Y, PrimitiveType.Cube, Color.green, material);
             CreateHandle(ManipulationMode.Move, ManipulationAxis.Z, PrimitiveType.Cube, Color.blue, material);
             CreateHandle(ManipulationMode.Rotate, ManipulationAxis.Y, PrimitiveType.Sphere, Color.yellow, material);
-            rotationRing = gameObject.AddComponent<LineRenderer>();
-            rotationRing.sharedMaterial = material;
-            rotationRing.useWorldSpace = false;
-            rotationRing.loop = true;
-            rotationRing.positionCount = 48;
-            rotationRing.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            var ringColor = new MaterialPropertyBlock();
-            ringColor.SetColor("_BaseColor", Color.yellow);
-            rotationRing.SetPropertyBlock(ringColor);
+            for (int i = 0; i < rotationSegments.Length; i++)
+            {
+                GameObject segment = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                segment.name = $"Rotate Y Ring {i}";
+                segment.transform.SetParent(transform, false);
+                segment.GetComponent<MeshRenderer>().sharedMaterial = material;
+                var color = new MaterialPropertyBlock();
+                color.SetColor("_BaseColor", Color.yellow);
+                segment.GetComponent<MeshRenderer>().SetPropertyBlock(color);
+                rotationSegments[i] = segment.AddComponent<GizmoHandle>();
+                rotationSegments[i].Configure(ManipulationMode.Rotate, ManipulationAxis.Y);
+            }
             CreateHandle(ManipulationMode.Resize, ManipulationAxis.X, PrimitiveType.Cube, Color.red, material);
             CreateHandle(ManipulationMode.Resize, ManipulationAxis.Y, PrimitiveType.Cube, Color.green, material);
             CreateHandle(ManipulationMode.Resize, ManipulationAxis.Z, PrimitiveType.Cube, Color.blue, material);
@@ -81,15 +84,17 @@ namespace Aedifica.Interaction
                     towardCamera = towardCamera.sqrMagnitude > 0.001f ? towardCamera.normalized : Vector3.back;
                     handles[(int)mode, (int)ManipulationAxis.Y].transform.localPosition = towardCamera * reach;
                     handles[(int)mode, (int)ManipulationAxis.Y].transform.localScale = Vector3.one * 0.65f;
-                    rotationRing.widthMultiplier = 0.08f;
-                    for (int i = 0; i < rotationRing.positionCount; i++)
+                    for (int i = 0; i < rotationSegments.Length; i++)
                     {
-                        float angle = i * Mathf.PI * 2f / rotationRing.positionCount;
-                        rotationRing.SetPosition(i, new Vector3(Mathf.Cos(angle) * reach, 0f, Mathf.Sin(angle) * reach));
+                        float angle = i * Mathf.PI * 2f / rotationSegments.Length;
+                        Transform segment = rotationSegments[i].transform;
+                        segment.localPosition = new Vector3(Mathf.Cos(angle) * reach, 0f, Mathf.Sin(angle) * reach);
+                        segment.localRotation = Quaternion.Euler(0f, -angle * Mathf.Rad2Deg, 0f);
+                        segment.localScale = new Vector3(0.24f, 0.18f, 2f * Mathf.PI * reach / rotationSegments.Length + 0.04f);
                     }
                 }
             }
-            rotationRing.enabled = mode == ManipulationMode.Rotate;
+            foreach (GizmoHandle segment in rotationSegments) segment.gameObject.SetActive(mode == ManipulationMode.Rotate);
         }
 
         public void Hide() => gameObject.SetActive(false);

@@ -58,7 +58,14 @@ namespace Aedifica.Tests.PlayMode
                     Assert.That(rotate.Axis, Is.EqualTo(ManipulationAxis.Y));
                     Assert.That(rotate.gameObject.activeInHierarchy, Is.True);
                     Assert.That(rotate.GetComponent<Collider>().enabled, Is.True);
-                    Assert.That(gizmo.GetComponent<LineRenderer>().enabled, Is.True);
+                    GizmoHandle[] visibleHandles = gizmo.GetComponentsInChildren<GizmoHandle>();
+                    Assert.That(visibleHandles.Length, Is.EqualTo(25));
+                    foreach (GizmoHandle visible in visibleHandles)
+                    {
+                        Assert.That(visible.Mode, Is.EqualTo(ManipulationMode.Rotate));
+                        Assert.That(visible.Axis, Is.EqualTo(ManipulationAxis.Y));
+                        Assert.That(visible.GetComponent<Collider>().enabled, Is.True);
+                    }
                 }
                 finally { Object.DestroyImmediate(gizmoObject); }
             }
