@@ -3,7 +3,8 @@
   "rootNamespace": "Aedifica.Tests.EditMode",
   "references": [
     "Aedifica.Core",
-    "Aedifica.Interaction"
+    "Aedifica.Interaction",
+    "Aedifica.Construction"
   ],
   "includePlatforms": [
     "Editor"
