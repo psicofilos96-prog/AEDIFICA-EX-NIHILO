@@ -121,7 +121,7 @@ namespace Aedifica.Interaction.Camera
         private void OnDisable()
         {
             EndWorldGrab();
-            if (motion != null) motion.EndOrbit();
+            if (motion != null) EndOrbitWithDiagnostics("OnDisable");
             wasOrbiting = false;
             CameraInputReader.ReleaseRotationCapture();
         }
@@ -130,7 +130,7 @@ namespace Aedifica.Interaction.Camera
         {
             if (!focused)
             {
-                if (motion != null) motion.EndOrbit();
+                if (motion != null) EndOrbitWithDiagnostics("FocusLost");
                 wasOrbiting = false;
                 CameraInputReader.ReleaseRotationCapture();
             }
@@ -138,15 +138,22 @@ namespace Aedifica.Interaction.Camera
 
         private void Update()
         {
-            CameraInput input = CameraInputReader.Read();
+            CameraInput input = CameraInputReader.Read(out float rawScroll, out CameraScrollRegime scrollRegime);
             input.PanPixels = Vector2.zero; // LMB pan uses the grabbed world point instead of mouse delta.
             bool orbiting = Mouse.current != null && Mouse.current.rightButton.isPressed;
             if (orbiting && !wasOrbiting)
             {
                 EndWorldGrab();
-                motion.BeginOrbit(ChooseOrbitPivot(), settings);
+                float distanceBefore = motion.Distance;
+                Vector3 focusBefore = motion.Focus;
+                Vector3 cameraPosition = sceneCamera.transform.position;
+                Vector3 pivot = ChooseOrbitPivot();
+                float pivotDistance = Vector3.Distance(cameraPosition, pivot);
+                motion.BeginOrbit(pivot, settings);
+                if (debugOrbit)
+                    Debug.Log($"Orbit begin transition: frame={Time.frameCount}, distanceBefore={distanceBefore:R}, distanceAfter={motion.Distance:R}, focusBefore={focusBefore.ToString("F6")}, focusAfter={motion.Focus.ToString("F6")}, pivotDistance={pivotDistance:R}, source={orbitPivotSource}, cameraPosition={cameraPosition.ToString("F6")}", this);
             }
-            if (!orbiting && wasOrbiting) motion.EndOrbit();
+            if (!orbiting && wasOrbiting) EndOrbitWithDiagnostics("RmbReleased");
             wasOrbiting = orbiting;
             if (orbiting)
             {
@@ -155,10 +162,25 @@ namespace Aedifica.Interaction.Camera
                 input.Scroll = 0f;
             }
             Vector3 previousPosition = motion.Position;
+            float distanceBeforeStep = motion.Distance;
+            float consumedScroll = input.Scroll;
             motion.Step(input, Time.unscaledDeltaTime, settings);
+            if (debugOrbit && motion.Distance != distanceBeforeStep)
+            {
+                string cause = consumedScroll != 0f && !motion.IsOrbiting ? "ZoomInput" :
+                    motion.IsOrbiting ? "OrbitStep" : "ZoomSmoothing";
+                Debug.Log($"Distance change: frame={Time.frameCount}, cause={cause}, rawScroll={rawScroll:R}, processedScroll={consumedScroll:R}, scrollRegime={scrollRegime}, distanceBefore={distanceBeforeStep:R}, distanceAfter={motion.Distance:R}, rmbPressed={orbiting}, orbitActive={motion.IsOrbiting}, cursorLock={Cursor.lockState}", this);
+            }
             if (debugOrbit && orbiting && input.RotatePixels != Vector2.zero)
                 Debug.Log($"Orbit drag: source={orbitPivotSource}, mouseDelta={input.RotatePixels}, yaw={motion.Yaw:F2}, pitch={motion.Pitch:F2}, pivotDistance={Vector3.Distance(motion.Position, motion.OrbitPivot):F3}, cameraDisplacement={Vector3.Distance(previousPosition, motion.Position):F3}", this);
             ApplyTransform();
+        }
+
+        private void EndOrbitWithDiagnostics(string reason)
+        {
+            if (debugOrbit && motion.IsOrbiting)
+                Debug.Log($"Orbit end: frame={Time.frameCount}, reason={reason}, distance={motion.Distance:R}, focus={motion.Focus.ToString("F6")}, cameraPosition={motion.Position.ToString("F6")}, yaw={motion.Yaw:R}, pitch={motion.Pitch:R}", this);
+            motion.EndOrbit();
         }
 
         private void ApplyTransform()

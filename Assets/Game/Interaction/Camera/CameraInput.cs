@@ -19,9 +19,13 @@ namespace Aedifica.Interaction.Camera
         private static bool previousVisibility;
         private static RotationCaptureFilter rotationCaptureFilter;
 
-        public static CameraInput Read()
+        public static CameraInput Read() => Read(out _, out _);
+
+        public static CameraInput Read(out float rawScroll, out CameraScrollRegime scrollRegime)
         {
             var input = new CameraInput();
+            rawScroll = 0f;
+            scrollRegime = CameraScrollRegime.Precision;
             var keyboard = Keyboard.current;
             var mouse = Mouse.current;
             if (keyboard != null)
@@ -35,7 +39,8 @@ namespace Aedifica.Interaction.Camera
                 bool rightPressed = mouse.rightButton.isPressed;
                 bool leftPressed = mouse.leftButton.isPressed;
                 SetRotationCapture(rightPressed);
-                input.Scroll = CameraScrollProcessor.Process(mouse.scroll.ReadValue().y, out _);
+                rawScroll = mouse.scroll.ReadValue().y;
+                input.Scroll = CameraScrollProcessor.Process(rawScroll, out scrollRegime);
                 Vector2 delta = mouse.delta.ReadValue();
                 if (rightPressed) delta = rotationCaptureFilter.Filter(delta);
                 AssignMouseDrag(ref input, rightPressed, leftPressed, delta);
