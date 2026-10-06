@@ -852,6 +852,11 @@ MonoBehaviour:
   sceneCamera: {fileID: 330585545}
   cityCamera: {fileID: 330585548}
   debugSelection: 0
+  snapSettings:
+    PositionSnapEnabled: 0
+    RotationSnapEnabled: 0
+    PositionIncrement: 0.5
+    RotationIncrementDegrees: 15
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

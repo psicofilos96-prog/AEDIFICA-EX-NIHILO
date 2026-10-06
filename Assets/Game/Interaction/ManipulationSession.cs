@@ -16,9 +16,14 @@ namespace Aedifica.Interaction
         private readonly Vector2 startPointer;
         private readonly Vector2 screenAxis;
         private readonly float pixelsPerMeter;
+        private readonly bool positionSnapEnabled;
+        private readonly bool rotationSnapEnabled;
+        private readonly float positionIncrement;
+        private readonly float rotationIncrementDegrees;
+        private readonly float initialYaw;
 
         public ManipulationSession(PieceData initialPiece, ManipulationMode mode, ManipulationAxis axis,
-            Vector2 startPointer, Vector2 screenAxis, float pixelsPerMeter)
+            Vector2 startPointer, Vector2 screenAxis, float pixelsPerMeter, SnapSettings snapSettings = null)
         {
             InitialPiece = initialPiece ?? throw new ArgumentNullException(nameof(initialPiece));
             if (mode != ManipulationMode.Move && mode != ManipulationMode.Rotate && mode != ManipulationMode.Resize) throw new ArgumentOutOfRangeException(nameof(mode));
@@ -31,6 +36,12 @@ namespace Aedifica.Interaction
             this.startPointer = startPointer;
             this.screenAxis = screenAxis.sqrMagnitude > 0f ? screenAxis.normalized : Vector2.right;
             this.pixelsPerMeter = pixelsPerMeter;
+            snapSettings?.ValidateEnabled();
+            positionSnapEnabled = snapSettings != null && snapSettings.PositionSnapEnabled;
+            rotationSnapEnabled = snapSettings != null && snapSettings.RotationSnapEnabled;
+            positionIncrement = positionSnapEnabled ? snapSettings.PositionIncrement : 0f;
+            rotationIncrementDegrees = rotationSnapEnabled ? snapSettings.RotationIncrementDegrees : 0f;
+            initialYaw = initialPiece.Transform.Rotation.eulerAngles.y;
         }
 
         public PieceData Evaluate(Vector2 pointer)
@@ -41,7 +52,10 @@ namespace Aedifica.Interaction
             {
                 float degrees = drag.x * DegreesPerPixel;
                 if (!IsFinite(degrees)) return InitialPiece;
-                Quaternion rotation = Quaternion.AngleAxis(degrees, Vector3.up) * InitialPiece.Transform.Rotation;
+                float rotationDelta = rotationSnapEnabled
+                    ? SnapPolicy.FromSession(initialYaw, initialYaw + degrees, rotationIncrementDegrees) - initialYaw
+                    : degrees;
+                Quaternion rotation = Quaternion.AngleAxis(rotationDelta, Vector3.up) * InitialPiece.Transform.Rotation;
                 return InitialPiece.WithTransform(new PieceTransform(InitialPiece.Transform.Position, rotation));
             }
 
@@ -49,8 +63,11 @@ namespace Aedifica.Interaction
             if (!IsFinite(meters)) return InitialPiece;
             if (Mode == ManipulationMode.Move)
             {
-                Vector3 axis = AxisVector(Axis);
-                return InitialPiece.WithTransform(new PieceTransform(InitialPiece.Transform.Position + axis * meters,
+                Vector3 start = InitialPiece.Transform.Position;
+                Vector3 position = start + AxisVector(Axis) * meters;
+                position[(int)Axis] = SnapPolicy.FromSession(start[(int)Axis], position[(int)Axis],
+                    positionIncrement, positionSnapEnabled);
+                return InitialPiece.WithTransform(new PieceTransform(position,
                     InitialPiece.Transform.Rotation));
             }
 

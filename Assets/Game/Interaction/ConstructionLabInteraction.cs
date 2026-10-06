@@ -19,9 +19,11 @@ namespace Aedifica.Interaction
         [SerializeField] private UnityEngine.Camera sceneCamera;
         [SerializeField] private CityBuilderCamera cityCamera;
         [SerializeField] private bool debugSelection;
+        [SerializeField] private SnapSettings snapSettings = new SnapSettings();
 
         public PieceId? SelectedPieceId => selection.SelectedPieceId;
         public ManipulationMode Mode => mode;
+        public SnapSettings Snapping => snapSettings;
 
         public void Configure(UnityEngine.Camera camera, CityBuilderCamera controller)
         {
@@ -43,6 +45,7 @@ namespace Aedifica.Interaction
         private void Awake()
         {
             lab = GetComponent<ConstructionLabBlocks>();
+            snapSettings ??= new SnapSettings();
             if (lab == null) throw new InvalidOperationException("ConstructionLabInteraction requires ConstructionLabBlocks on the same GameObject.");
             if (sceneCamera == null) throw new InvalidOperationException("ConstructionLabInteraction.sceneCamera is not assigned.");
             if (cityCamera == null) throw new InvalidOperationException("ConstructionLabInteraction.cityCamera is not assigned.");
@@ -69,6 +72,8 @@ namespace Aedifica.Interaction
                 if (keyboard.digit3Key.wasPressedThisFrame || keyboard.numpad3Key.wasPressedThisFrame) mode = ManipulationMode.Resize;
                 if (keyboard.mKey.wasPressedThisFrame && selection.SelectedPieceId is PieceId selectedMaterialPiece)
                     lab.CycleMaterial(selectedMaterialPiece);
+                if (keyboard.gKey.wasPressedThisFrame) TogglePositionSnap();
+                if (keyboard.rKey.wasPressedThisFrame) ToggleRotationSnap();
             }
 
             Mouse mouse = Mouse.current;
@@ -117,11 +122,23 @@ namespace Aedifica.Interaction
                 Vector2 projected = new Vector2(screenDelta.x, screenDelta.y);
                 float pixelsPerMeter = Mathf.Max(1f, projected.magnitude);
                 session = new ManipulationSession(selectedPiece, nearestHandle.Mode, nearestHandle.Axis,
-                    pointer, projected.normalized, pixelsPerMeter);
+                    pointer, projected.normalized, pixelsPerMeter, snapSettings);
                 cityCamera.SetPanSuppressed(true);
             }
             else if (nearestPiece != null) pressedPieceId = nearestPiece.Id;
             if (debugSelection) Debug.Log($"Selection PointerDown result: pressedPiece={pressedPieceId}, handle={nearestHandle}", this);
+        }
+
+        private void TogglePositionSnap()
+        {
+            try { Debug.Log($"Grid Snap: {(snapSettings.TogglePosition() ? "ON" : "OFF")} ({snapSettings.PositionIncrement} m)", this); }
+            catch (ArgumentOutOfRangeException exception) { Debug.LogError(exception.Message, this); }
+        }
+
+        private void ToggleRotationSnap()
+        {
+            try { Debug.Log($"Angle Snap: {(snapSettings.ToggleRotation() ? "ON" : "OFF")} ({snapSettings.RotationIncrementDegrees}°)", this); }
+            catch (ArgumentOutOfRangeException exception) { Debug.LogError(exception.Message, this); }
         }
 
         public bool TryPickPieceAt(Vector2 pointer, out PieceId id)
