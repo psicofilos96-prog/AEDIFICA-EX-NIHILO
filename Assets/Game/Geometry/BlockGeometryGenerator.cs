@@ -9,25 +9,33 @@ namespace Aedifica.Geometry
         public static BlockGeometry Generate(BlockDimensions dimensions)
         {
             if (!dimensions.IsValid) throw new ArgumentException("Block dimensions must be valid.", nameof(dimensions));
+            return GeneratePiece(new PieceDimensions(dimensions));
+        }
 
-            float x = dimensions.Width * 0.5f;
-            float y = dimensions.Height;
-            float z = dimensions.Depth * 0.5f;
+        public static BlockGeometry GeneratePiece(PieceDimensions dimensions)
+        {
+            if (!dimensions.IsValid) throw new ArgumentException("Piece dimensions must be valid.", nameof(dimensions));
+            float width = dimensions.X;
+            float height = dimensions.Y;
+            float depth = dimensions.Z;
+            float x = width * 0.5f;
+            float y = height;
+            float z = depth * 0.5f;
             var vertices = new Vector3[24];
             var triangles = new int[36];
             var normals = new Vector3[24];
             var uvs = new Vector2[24];
             int face = 0;
 
-            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(x, 0, -z), new Vector3(-x, 0, -z), new Vector3(-x, y, -z), new Vector3(x, y, -z), Vector3.back, dimensions.Width, y);
-            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(-x, 0, z), new Vector3(x, 0, z), new Vector3(x, y, z), new Vector3(-x, y, z), Vector3.forward, dimensions.Width, y);
-            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(x, 0, z), new Vector3(x, 0, -z), new Vector3(x, y, -z), new Vector3(x, y, z), Vector3.right, dimensions.Depth, y);
-            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(-x, 0, -z), new Vector3(-x, 0, z), new Vector3(-x, y, z), new Vector3(-x, y, -z), Vector3.left, dimensions.Depth, y);
-            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(-x, y, z), new Vector3(x, y, z), new Vector3(x, y, -z), new Vector3(-x, y, -z), Vector3.up, dimensions.Width, dimensions.Depth);
-            AddFace(vertices, triangles, normals, uvs, face, new Vector3(-x, 0, -z), new Vector3(x, 0, -z), new Vector3(x, 0, z), new Vector3(-x, 0, z), Vector3.down, dimensions.Width, dimensions.Depth);
+            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(x, 0, -z), new Vector3(-x, 0, -z), new Vector3(-x, y, -z), new Vector3(x, y, -z), Vector3.back, width, y);
+            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(-x, 0, z), new Vector3(x, 0, z), new Vector3(x, y, z), new Vector3(-x, y, z), Vector3.forward, width, y);
+            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(x, 0, z), new Vector3(x, 0, -z), new Vector3(x, y, -z), new Vector3(x, y, z), Vector3.right, depth, y);
+            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(-x, 0, -z), new Vector3(-x, 0, z), new Vector3(-x, y, z), new Vector3(-x, y, -z), Vector3.left, depth, y);
+            AddFace(vertices, triangles, normals, uvs, face++, new Vector3(-x, y, z), new Vector3(x, y, z), new Vector3(x, y, -z), new Vector3(-x, y, -z), Vector3.up, width, depth);
+            AddFace(vertices, triangles, normals, uvs, face, new Vector3(-x, 0, -z), new Vector3(x, 0, -z), new Vector3(x, 0, z), new Vector3(-x, 0, z), Vector3.down, width, depth);
 
             return new BlockGeometry(vertices, triangles, normals, uvs,
-                new Bounds(new Vector3(0f, y * 0.5f, 0f), new Vector3(dimensions.Width, y, dimensions.Depth)));
+                new Bounds(new Vector3(0f, y * 0.5f, 0f), new Vector3(width, y, depth)));
         }
 
         private static void AddFace(Vector3[] vertices, int[] triangles, Vector3[] normals, Vector2[] uvs, int face,

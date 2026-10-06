@@ -31,10 +31,16 @@ namespace Aedifica.Rendering
                 new PieceTransform(new Vector3(0f, 0f, -4f), Quaternion.Euler(0f, 30f, 0f)), new BlockDimensions(1f, 3f, 1f)));
             world.Add(new PieceData(PieceId.Parse("cccccccccccccccccccccccccccccccc"),
                 new PieceTransform(new Vector3(5f, 0f, -4f), Quaternion.identity), new BlockDimensions(4f, 0.5f, 2f)));
+            world.Add(new PieceData(PieceId.Parse("dddddddddddddddddddddddddddddddd"),
+                new PieceTransform(new Vector3(0f, 0f, 6f), Quaternion.identity), new SlabDimensions(8f, 0.2f, 6f)));
+            world.Add(new PieceData(PieceId.Parse("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
+                new PieceTransform(new Vector3(0f, 0.2f, 8.7f), Quaternion.identity), new WallDimensions(8f, 3f, 0.3f)));
+            world.Add(new PieceData(PieceId.Parse("ffffffffffffffffffffffffffffffff"),
+                new PieceTransform(new Vector3(-3.7f, 0.2f, 6f), Quaternion.Euler(0f, 90f, 0f)), new WallDimensions(5.4f, 2.5f, 0.25f)));
 
             foreach (PieceData piece in world.Pieces)
             {
-                var viewObject = new GameObject($"Lab Block {piece.Id}");
+                var viewObject = new GameObject($"Lab {piece.Type} {piece.Id}");
                 viewObject.transform.SetParent(transform, false);
                 PieceView view = viewObject.AddComponent<PieceView>();
                 view.Initialize(piece, sharedBlockMaterial);

@@ -7,26 +7,47 @@ namespace Aedifica.Construction
         public PieceId Id { get; }
         public PieceType Type { get; }
         public PieceTransform Transform { get; }
-        public BlockDimensions BlockDimensions { get; }
+        public PieceDimensions Dimensions { get; }
+        public BlockDimensions BlockDimensions => Dimensions.AsBlock();
+        public WallDimensions WallDimensions => Dimensions.AsWall();
+        public SlabDimensions SlabDimensions => Dimensions.AsSlab();
 
-        public PieceData(PieceId id, PieceTransform transform, BlockDimensions blockDimensions)
-            : this(id, PieceType.Block, transform, blockDimensions)
+        public PieceData(PieceId id, PieceTransform transform, BlockDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, WallDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, SlabDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+
+        // Keep the P0.2 constructor while rejecting a mismatched semantic type.
+        public PieceData(PieceId id, PieceType type, PieceTransform transform, BlockDimensions dimensions)
+            : this(id, transform, CheckBlockType(type, dimensions)) { }
+
+        private static PieceDimensions CheckBlockType(PieceType type, BlockDimensions dimensions)
         {
+            if (type != PieceType.Block) throw new ArgumentOutOfRangeException(nameof(type));
+            return new PieceDimensions(dimensions);
         }
 
-        public PieceData WithTransform(PieceTransform transform) => new PieceData(Id, Type, transform, BlockDimensions);
-        public PieceData WithBlockDimensions(BlockDimensions dimensions) => new PieceData(Id, Type, Transform, dimensions);
-
-        public PieceData(PieceId id, PieceType type, PieceTransform transform, BlockDimensions blockDimensions)
+        public PieceData(PieceId id, PieceTransform transform, PieceDimensions dimensions)
         {
-            if (type != PieceType.Block) throw new ArgumentOutOfRangeException(nameof(type), "Only Block is supported in P0.2.");
             if (!id.IsValid) throw new ArgumentException("A piece must have a valid ID.", nameof(id));
             if (!transform.IsValid) throw new ArgumentException("A piece must have a valid transform.", nameof(transform));
-            if (!blockDimensions.IsValid) throw new ArgumentException("A block must have valid dimensions.", nameof(blockDimensions));
+            if (!dimensions.IsValid) throw new ArgumentException("A piece must have valid dimensions.", nameof(dimensions));
             Id = id;
-            Type = type;
+            Type = dimensions.Type;
             Transform = transform;
-            BlockDimensions = blockDimensions;
+            Dimensions = dimensions;
         }
+
+        public PieceData WithTransform(PieceTransform transform) => new PieceData(Id, transform, Dimensions);
+        public PieceData WithDimensions(PieceDimensions dimensions)
+        {
+            if (dimensions.Type != Type) throw new ArgumentException("Replacement parameters must preserve piece type.", nameof(dimensions));
+            return new PieceData(Id, Transform, dimensions);
+        }
+        public PieceData WithBlockDimensions(BlockDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithWallDimensions(WallDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithSlabDimensions(SlabDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
     }
 }

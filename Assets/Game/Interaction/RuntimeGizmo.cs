@@ -55,7 +55,7 @@ namespace Aedifica.Interaction
             float distance = Vector3.Distance(sceneCamera.transform.position, piece.Transform.Position);
             float scale = Mathf.Clamp(distance * 0.04f, 0.35f, 8f);
             bool resize = mode == ManipulationMode.Resize;
-            transform.SetPositionAndRotation(piece.Transform.Position + (resize ? Vector3.zero : piece.Transform.Rotation * new Vector3(0f, piece.BlockDimensions.Height * 0.5f, 0f)),
+            transform.SetPositionAndRotation(piece.Transform.Position + (resize ? Vector3.zero : piece.Transform.Rotation * new Vector3(0f, piece.Dimensions.Y * 0.5f, 0f)),
                 resize ? piece.Transform.Rotation : Quaternion.identity);
             transform.localScale = Vector3.one * scale;
 
@@ -65,13 +65,13 @@ namespace Aedifica.Interaction
 
             if (resize)
             {
-                handles[(int)mode, 0].transform.localPosition = new Vector3(piece.BlockDimensions.Width * 0.5f / scale + 0.5f, piece.BlockDimensions.Height * 0.5f / scale, 0f);
-                handles[(int)mode, 1].transform.localPosition = new Vector3(0f, piece.BlockDimensions.Height / scale + 0.5f, 0f);
-                handles[(int)mode, 2].transform.localPosition = new Vector3(0f, piece.BlockDimensions.Height * 0.5f / scale, piece.BlockDimensions.Depth * 0.5f / scale + 0.5f);
+                handles[(int)mode, 0].transform.localPosition = new Vector3(piece.Dimensions.X * 0.5f / scale + 0.5f, piece.Dimensions.Y * 0.5f / scale, 0f);
+                handles[(int)mode, 1].transform.localPosition = new Vector3(0f, piece.Dimensions.Y / scale + 0.5f, 0f);
+                handles[(int)mode, 2].transform.localPosition = new Vector3(0f, piece.Dimensions.Y * 0.5f / scale, piece.Dimensions.Z * 0.5f / scale + 0.5f);
             }
             else
             {
-                float reach = Mathf.Max(piece.BlockDimensions.Width, piece.BlockDimensions.Height, piece.BlockDimensions.Depth)
+                float reach = Mathf.Max(piece.Dimensions.X, piece.Dimensions.Y, piece.Dimensions.Z)
                     * 0.5f / scale + 0.8f;
                 for (int axis = 0; axis < 3; axis++)
                     if (handles[(int)mode, axis] != null)

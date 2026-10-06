@@ -54,11 +54,9 @@ namespace Aedifica.Interaction
                     InitialPiece.Transform.Rotation));
             }
 
-            BlockDimensions old = InitialPiece.BlockDimensions;
-            float width = Axis == ManipulationAxis.X ? Mathf.Max(MinimumDimension, old.Width + meters) : old.Width;
-            float height = Axis == ManipulationAxis.Y ? Mathf.Max(MinimumDimension, old.Height + meters) : old.Height;
-            float depth = Axis == ManipulationAxis.Z ? Mathf.Max(MinimumDimension, old.Depth + meters) : old.Depth;
-            return InitialPiece.WithBlockDimensions(new BlockDimensions(width, height, depth));
+            PieceDimensions old = InitialPiece.Dimensions;
+            float current = Axis == ManipulationAxis.X ? old.X : Axis == ManipulationAxis.Y ? old.Y : old.Z;
+            return InitialPiece.WithDimensions(old.Resize((int)Axis, Mathf.Max(MinimumDimension, current + meters)));
         }
 
         public static Vector3 AxisVector(ManipulationAxis axis)

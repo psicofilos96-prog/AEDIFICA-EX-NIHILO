@@ -194,7 +194,7 @@ namespace Aedifica.Interaction
         {
             PieceData changed = session.Evaluate(pointer);
             if (!lab.World.TryGet(changed.Id, out PieceData current)) return;
-            if (changed.Transform.Equals(current.Transform) && changed.BlockDimensions.Equals(current.BlockDimensions)) return;
+            if (changed.Transform.Equals(current.Transform) && changed.Dimensions.Equals(current.Dimensions)) return;
             lab.Apply(changed);
         }
 

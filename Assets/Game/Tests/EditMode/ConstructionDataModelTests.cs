@@ -84,7 +84,7 @@ namespace Aedifica.Tests.EditMode
             Assert.Throws<ArgumentOutOfRangeException>(() => new PieceData(IdA, (PieceType)999, transform, dimensions));
             Assert.Throws<ArgumentException>(() => new PieceData(default, transform, dimensions));
             Assert.Throws<ArgumentException>(() => new PieceData(IdA, default, dimensions));
-            Assert.Throws<ArgumentException>(() => new PieceData(IdA, transform, default));
+            Assert.Throws<ArgumentException>(() => new PieceData(IdA, transform, default(BlockDimensions)));
         }
 
         [Test]

@@ -9,7 +9,7 @@ namespace Aedifica.Rendering
     public sealed class PieceView : MonoBehaviour
     {
         public PieceId Id { get; private set; }
-        private BlockDimensions dimensions;
+        private PieceDimensions dimensions;
         private Mesh ownedMesh;
         private MeshFilter meshFilter;
         private MeshRenderer meshRenderer;
@@ -37,15 +37,15 @@ namespace Aedifica.Rendering
         public void Refresh(PieceData piece)
         {
             if (piece == null || piece.Id != Id) throw new ArgumentException("View and piece IDs must match.", nameof(piece));
-            if (ownedMesh == null || !dimensions.Equals(piece.BlockDimensions))
+            if (ownedMesh == null || !dimensions.Equals(piece.Dimensions))
             {
-                Mesh replacement = BlockMeshFactory.Build(BlockGeometryGenerator.Generate(piece.BlockDimensions));
+                Mesh replacement = BlockMeshFactory.Build(BlockGeometryGenerator.GeneratePiece(piece.Dimensions));
                 meshFilter.sharedMesh = replacement;
                 if (ownedMesh != null) Destroy(ownedMesh);
                 ownedMesh = replacement;
-                dimensions = piece.BlockDimensions;
-                boxCollider.center = new Vector3(0f, dimensions.Height * 0.5f, 0f);
-                boxCollider.size = new Vector3(dimensions.Width, dimensions.Height, dimensions.Depth);
+                dimensions = piece.Dimensions;
+                boxCollider.center = new Vector3(0f, dimensions.Y * 0.5f, 0f);
+                boxCollider.size = new Vector3(dimensions.X, dimensions.Y, dimensions.Z);
             }
             transform.SetPositionAndRotation(piece.Transform.Position, piece.Transform.Rotation);
             transform.localScale = Vector3.one;
