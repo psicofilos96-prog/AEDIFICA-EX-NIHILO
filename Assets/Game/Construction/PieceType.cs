@@ -14,6 +14,9 @@ namespace Aedifica.Construction
         GableRoof = 9,
         HipRoof = 10,
         Stair = 11,
-        Ramp = 12
+        Ramp = 12,
+        Arch = 13,
+        Vault = 14,
+        Dome = 15
     }
 }

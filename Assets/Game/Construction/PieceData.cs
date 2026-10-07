@@ -21,6 +21,9 @@ namespace Aedifica.Construction
         public HipRoofDimensions HipRoofDimensions => Dimensions.AsHipRoof();
         public StairDimensions StairDimensions => Dimensions.AsStair();
         public RampDimensions RampDimensions => Dimensions.AsRamp();
+        public ArchDimensions ArchDimensions => Dimensions.AsArch();
+        public VaultDimensions VaultDimensions => Dimensions.AsVault();
+        public DomeDimensions DomeDimensions => Dimensions.AsDome();
 
         public PieceData(PieceId id, PieceTransform transform, BlockDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
@@ -45,6 +48,12 @@ namespace Aedifica.Construction
         public PieceData(PieceId id, PieceTransform transform, StairDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
         public PieceData(PieceId id, PieceTransform transform, RampDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, ArchDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, VaultDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, DomeDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
 
         // Keep the P0.2 constructor while rejecting a mismatched semantic type.
@@ -91,6 +100,9 @@ namespace Aedifica.Construction
         public PieceData WithHipRoofDimensions(HipRoofDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithStairDimensions(StairDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithRampDimensions(RampDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithArchDimensions(ArchDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithVaultDimensions(VaultDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithDomeDimensions(DomeDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithStepCount(int steps) => WithDimensions(Dimensions.WithStepCount(steps));
         public PieceData WithRise(float rise) => WithDimensions(Dimensions.WithRise(rise));
     }

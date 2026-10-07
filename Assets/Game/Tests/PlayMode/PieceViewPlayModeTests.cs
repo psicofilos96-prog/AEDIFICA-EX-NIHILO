@@ -7,6 +7,63 @@ namespace Aedifica.Tests.PlayMode
 {
     public sealed class PieceViewPlayModeTests
     {
+        [TestCase(PieceType.Arch)]
+        [TestCase(PieceType.Vault)]
+        [TestCase(PieceType.Dome)]
+        public void CurvedViewUsesActualShellColliderAndMaterialChangeKeepsMesh(PieceType type)
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.That(shader, Is.Not.Null);
+            var material = new Material(shader);
+            var viewObject = new GameObject("Curved View Test");
+            try
+            {
+                PieceId id = PieceId.Parse("50000000000000000000000000000011");
+                var pose = new PieceTransform(Vector3.zero, Quaternion.identity);
+                PieceData original = type == PieceType.Arch
+                    ? new PieceData(id, pose, new ArchDimensions(4f, 3f, 0.7f, 0.6f, 1.2f, 0.25f))
+                    : type == PieceType.Vault
+                        ? new PieceData(id, pose, new VaultDimensions(4f, 2.8f, 5f, 0.25f))
+                        : new PieceData(id, pose, new DomeDimensions(4f, 2.5f, 0.25f));
+                PieceView view = viewObject.AddComponent<PieceView>();
+                view.Initialize(original, material);
+                Mesh mesh = viewObject.GetComponent<MeshFilter>().sharedMesh;
+                MeshCollider collider = viewObject.GetComponent<MeshCollider>();
+                Assert.That(viewObject.GetComponent<MeshRenderer>().sharedMaterial, Is.Not.Null);
+                Assert.That(collider, Is.Not.Null);
+                Assert.That(collider.enabled, Is.True);
+                Assert.That(collider.sharedMesh, Is.SameAs(mesh));
+                Assert.That(viewObject.GetComponent<BoxCollider>().enabled, Is.False);
+                Assert.That(viewObject.transform.localScale, Is.EqualTo(Vector3.one));
+                Physics.SyncTransforms();
+                Ray openingRay = type == PieceType.Dome
+                    ? new Ray(new Vector3(0f, -1f, 0f), Vector3.up)
+                    : new Ray(new Vector3(0f, 0.4f, -5f), Vector3.forward);
+                Assert.That(collider.Raycast(openingRay, out _, type == PieceType.Dome ? 1.4f : 10f), Is.False,
+                    $"{type} opening should remain empty");
+                Ray shellRay = type == PieceType.Arch
+                    ? new Ray(new Vector3(-1.7f, 1f, -5f), Vector3.forward)
+                    : new Ray(new Vector3(0f, 5f, 0f), Vector3.down);
+                Assert.That(collider.Raycast(shellRay, out _, 10f), Is.True, $"{type} solid shell must be pickable");
+                view.Refresh(original.WithMaterial(LabMaterialIds.Stone));
+                Assert.That(viewObject.GetComponent<MeshFilter>().sharedMesh, Is.SameAs(mesh));
+                view.SetSelected(true);
+                var highlight = new MaterialPropertyBlock();
+                viewObject.GetComponent<MeshRenderer>().GetPropertyBlock(highlight);
+                Assert.That(highlight.GetColor("_BaseColor").g, Is.EqualTo(0.75f));
+                PieceData resized = original.WithDimensions(original.Dimensions.Resize(1, original.Dimensions.Y + 0.2f));
+                view.Refresh(resized);
+                Assert.That(viewObject.GetComponent<MeshFilter>().sharedMesh, Is.Not.SameAs(mesh));
+                Assert.That(collider.sharedMesh, Is.SameAs(viewObject.GetComponent<MeshFilter>().sharedMesh));
+                Assert.That(viewObject.GetComponents<MeshCollider>().Length, Is.EqualTo(1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(viewObject);
+                Object.DestroyImmediate(material);
+            }
+        }
+
         [TestCase(PieceType.Stair)]
         [TestCase(PieceType.Ramp)]
         public void CirculationViewUsesOneColliderAndRebuildsOnlyForDimensions(PieceType type)

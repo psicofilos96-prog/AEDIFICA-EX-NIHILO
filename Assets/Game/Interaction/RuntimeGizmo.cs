@@ -61,6 +61,7 @@ namespace Aedifica.Interaction
             float scale = Mathf.Clamp(distance * 0.04f, 0.35f, 8f);
             bool resize = mode == ManipulationMode.Resize;
             bool slopedRoof = piece.Dimensions.IsSlopedRoof;
+            bool duplicateDomeDiameter = piece.Dimensions.IsDome;
             transform.SetPositionAndRotation(piece.Transform.Position + (resize ? Vector3.zero : piece.Transform.Rotation * new Vector3(0f, piece.Dimensions.Y * 0.5f, 0f)),
                 resize ? piece.Transform.Rotation : Quaternion.identity);
             transform.localScale = Vector3.one * scale;
@@ -68,10 +69,12 @@ namespace Aedifica.Interaction
             for (int m = 0; m < 3; m++)
                 for (int a = 0; a < 3; a++)
                     if (handles[m, a] != null) handles[m, a].gameObject.SetActive(m == (int)mode &&
-                        !(resize && slopedRoof && a == (int)ManipulationAxis.Y));
+                        !(resize && slopedRoof && a == (int)ManipulationAxis.Y) &&
+                        !(resize && duplicateDomeDiameter && a == (int)ManipulationAxis.Z));
             foreach (GizmoHandle handle in negativeResizeHandles)
                 handle.gameObject.SetActive(resize && resizeMode == ResizeMode.Face &&
-                    !(slopedRoof && handle.Axis == ManipulationAxis.Y));
+                    !(slopedRoof && handle.Axis == ManipulationAxis.Y) &&
+                    !(duplicateDomeDiameter && handle.Axis == ManipulationAxis.Z));
 
             if (resize)
             {

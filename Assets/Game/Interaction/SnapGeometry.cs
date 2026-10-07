@@ -53,6 +53,11 @@ namespace Aedifica.Interaction
                 CollectCirculation(piece, output, onlyFace, movingAxis, faceSign);
                 return;
             }
+            if (piece.Dimensions.IsCurved)
+            {
+                CollectCurved(piece, output, onlyFace, movingAxis, faceSign);
+                return;
+            }
             Vector3[] corners = new Vector3[8];
             for (int i = 0; i < 8; i++)
             {
@@ -87,6 +92,130 @@ namespace Aedifica.Interaction
                 Vector3 faceCenter = center + normal * (extent * 0.5f);
                 output.Add(new SnapFeature(GeometricSnapKind.Surface, piece.Id, axis * 2 + (side > 0 ? 1 : 0),
                     faceCenter, faceCenter, normal, u, v));
+            }
+        }
+
+        private static void CollectCurved(PieceData piece, List<SnapFeature> output,
+            bool onlyFace, ManipulationAxis axis, int sign)
+        {
+            int point = 0, edge = 0, surface = 0;
+            if (piece.Dimensions.IsArch)
+            {
+                ArchDimensions d = piece.Dimensions.AsArch();
+                Vector2[] outline = CurvedProfile.ArchOutline(d);
+                for (int end = -1; end <= 1; end += 2)
+                {
+                    float z = end * d.Depth * 0.5f;
+                    for (int i = 0; i < outline.Length; i++)
+                    {
+                        Vector2 a = outline[i], b = outline[(i + 1) % outline.Length];
+                        Vector3 from = new Vector3(a.x, a.y, z), to = new Vector3(b.x, b.y, z);
+                        AddCirculationEdge(piece, output, from, to, ref edge, onlyFace, axis, sign);
+                        if (i < 5 || i == 5 + CurvedProfile.ArchSegments / 2 ||
+                            i == 5 + CurvedProfile.ArchSegments || i == outline.Length - 1)
+                            AddCirculationPoint(piece, output, from, ref point, onlyFace, axis, sign);
+                    }
+                    // The pier and crown are actual planar regions of each end face.
+                    AddCirculationSurface(piece, output, new Vector3(-d.Width * 0.5f + d.PierWidth * 0.5f,
+                        d.SpringHeight * 0.5f, z), end < 0 ? Vector3.back : Vector3.forward,
+                        Vector3.right * d.PierWidth * 0.5f, Vector3.up * d.SpringHeight * 0.5f,
+                        ref surface, onlyFace, axis, sign);
+                    AddCirculationSurface(piece, output, new Vector3(d.Width * 0.5f - d.PierWidth * 0.5f,
+                        d.SpringHeight * 0.5f, z), end < 0 ? Vector3.back : Vector3.forward,
+                        Vector3.right * d.PierWidth * 0.5f, Vector3.up * d.SpringHeight * 0.5f,
+                        ref surface, onlyFace, axis, sign);
+                }
+                AddCirculationSurface(piece, output, new Vector3(0f, d.Height, 0f), Vector3.up,
+                    Vector3.right * d.Width * 0.5f, Vector3.forward * d.Depth * 0.5f,
+                    ref surface, onlyFace, axis, sign);
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    AddCirculationSurface(piece, output, new Vector3(side * d.Width * 0.5f, d.Height * 0.5f, 0f),
+                        Vector3.right * side, Vector3.up * d.Height * 0.5f, Vector3.forward * d.Depth * 0.5f,
+                        ref surface, onlyFace, axis, sign);
+                    AddCirculationSurface(piece, output,
+                        new Vector3(side * (d.Width * 0.5f - d.PierWidth * 0.5f), 0f, 0f),
+                        Vector3.down, Vector3.right * d.PierWidth * 0.5f, Vector3.forward * d.Depth * 0.5f,
+                        ref surface, onlyFace, axis, sign);
+                }
+                return;
+            }
+            if (piece.Dimensions.IsVault)
+            {
+                VaultDimensions d = piece.Dimensions.AsVault();
+                int segments = CurvedProfile.VaultSegments;
+                for (int i = 0; i <= segments; i += segments / 4)
+                {
+                    Vector2 outer = CurvedProfile.VaultOuter(d, i);
+                    Vector2 inner = CurvedProfile.VaultInner(d, i);
+                    Vector3 low = new Vector3(outer.x, outer.y, -d.Length * 0.5f);
+                    Vector3 high = new Vector3(outer.x, outer.y, d.Length * 0.5f);
+                    AddCirculationPoint(piece, output, low, ref point, onlyFace, axis, sign);
+                    AddCirculationPoint(piece, output, high, ref point, onlyFace, axis, sign);
+                    AddCirculationEdge(piece, output, low, high, ref edge, onlyFace, axis, sign);
+                    for (int end = -1; end <= 1; end += 2)
+                        AddCirculationEdge(piece, output,
+                            new Vector3(outer.x, outer.y, end * d.Length * 0.5f),
+                            new Vector3(inner.x, inner.y, end * d.Length * 0.5f),
+                            ref edge, onlyFace, axis, sign);
+                }
+                for (int sample = 0; sample < 5; sample++)
+                {
+                    int i = sample == 4 ? segments - 1 : sample * (segments / 4);
+                    Vector2 a = CurvedProfile.VaultOuter(d, i), b = CurvedProfile.VaultOuter(d, i + 1);
+                    Vector3 along = new Vector3(b.x - a.x, b.y - a.y, 0f);
+                    Vector3 normal = new Vector3(along.y, -along.x, 0f).normalized;
+                    AddCirculationSurface(piece, output, new Vector3((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f, 0f),
+                        normal, along * 0.5f, Vector3.forward * d.Length * 0.5f,
+                        ref surface, onlyFace, axis, sign);
+                    for (int end = -1; end <= 1; end += 2)
+                    {
+                        Vector2 innerA = CurvedProfile.VaultInner(d, i), innerB = CurvedProfile.VaultInner(d, i + 1);
+                        AddCirculationTriangle(piece, output, new Vector3(a.x, a.y, end * d.Length * 0.5f),
+                            new Vector3(b.x, b.y, end * d.Length * 0.5f),
+                            new Vector3(innerB.x, innerB.y, end * d.Length * 0.5f),
+                            Vector3.forward * end, ref surface, onlyFace, axis, sign);
+                        AddCirculationTriangle(piece, output, new Vector3(a.x, a.y, end * d.Length * 0.5f),
+                            new Vector3(innerB.x, innerB.y, end * d.Length * 0.5f),
+                            new Vector3(innerA.x, innerA.y, end * d.Length * 0.5f),
+                            Vector3.forward * end, ref surface, onlyFace, axis, sign);
+                    }
+                }
+                for (int side = -1; side <= 1; side += 2)
+                    AddCirculationSurface(piece, output,
+                        new Vector3(side * (d.Width * 0.5f - d.Thickness * 0.5f), 0f, 0f),
+                        Vector3.down, Vector3.right * d.Thickness * 0.5f,
+                        Vector3.forward * d.Length * 0.5f, ref surface, onlyFace, axis, sign);
+                return;
+            }
+            DomeDimensions dome = piece.Dimensions.AsDome();
+            Vector3 apex = CurvedProfile.DomeOuter(dome, 0, 0);
+            AddCirculationPoint(piece, output, apex, ref point, onlyFace, axis, sign);
+            int quarter = CurvedProfile.DomeLongitudeSegments / 4;
+            int bottom = CurvedProfile.DomeLatitudeSegments;
+            for (int longitude = 0; longitude < CurvedProfile.DomeLongitudeSegments; longitude += quarter)
+            {
+                Vector3 basePoint = CurvedProfile.DomeOuter(dome, bottom, longitude);
+                Vector3 nextBase = CurvedProfile.DomeOuter(dome, bottom, longitude + 1);
+                AddCirculationPoint(piece, output, basePoint, ref point, onlyFace, axis, sign);
+                AddCirculationEdge(piece, output, basePoint, nextBase, ref edge, onlyFace, axis, sign);
+                AddCirculationEdge(piece, output, basePoint,
+                    CurvedProfile.DomeInner(dome, bottom, longitude), ref edge, onlyFace, axis, sign);
+                Vector3 innerNext = CurvedProfile.DomeInner(dome, bottom, longitude + 1);
+                AddCirculationTriangle(piece, output, basePoint, nextBase, innerNext,
+                    Vector3.down, ref surface, onlyFace, axis, sign);
+                int latitude = bottom / 2;
+                Vector3 domeA = CurvedProfile.DomeOuter(dome, latitude, longitude);
+                Vector3 domeB = CurvedProfile.DomeOuter(dome, latitude, longitude + 1);
+                Vector3 domeC = CurvedProfile.DomeOuter(dome, latitude + 1, longitude + 1);
+                Vector3 domeNormal = Vector3.Cross(domeB - domeA, domeC - domeA).normalized;
+                if (Vector3.Dot(domeNormal, domeA) < 0f) domeNormal = -domeNormal;
+                AddCirculationTriangle(piece, output, domeA, domeB, domeC, domeNormal,
+                    ref surface, onlyFace, axis, sign);
+                Vector3 near0 = CurvedProfile.DomeOuter(dome, 1, longitude);
+                Vector3 near1 = CurvedProfile.DomeOuter(dome, 1, longitude + 1);
+                AddCirculationTriangle(piece, output, apex, near0, near1, Vector3.up,
+                    ref surface, onlyFace, axis, sign);
             }
         }
 

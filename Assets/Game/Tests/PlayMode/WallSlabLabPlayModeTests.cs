@@ -34,6 +34,7 @@ namespace Aedifica.Tests.PlayMode
                 Assert.That(lab.World.Count, Is.GreaterThanOrEqualTo(14));
                 bool block = false, wall = false, slab = false, column = false, beam = false, parapet = false;
                 bool flatRoof = false, shedRoof = false, gableRoof = false, hipRoof = false, stair = false, ramp = false;
+                bool arch = false, vault = false, dome = false;
                 foreach (PieceData piece in lab.World.Pieces)
                 {
                     block |= piece.Type == PieceType.Block;
@@ -48,12 +49,15 @@ namespace Aedifica.Tests.PlayMode
                     hipRoof |= piece.Type == PieceType.HipRoof;
                     stair |= piece.Type == PieceType.Stair;
                     ramp |= piece.Type == PieceType.Ramp;
+                    arch |= piece.Type == PieceType.Arch;
+                    vault |= piece.Type == PieceType.Vault;
+                    dome |= piece.Type == PieceType.Dome;
                     Assert.That(lab.TryGetView(piece.Id, out PieceView view), Is.True);
                     Assert.That(view.Id, Is.EqualTo(piece.Id));
                     Assert.That(view.transform.localScale, Is.EqualTo(Vector3.one));
                     Assert.That(view.GetComponent<MeshFilter>().sharedMesh, Is.Not.Null);
                     BoxCollider collider = view.GetComponent<BoxCollider>();
-                    bool meshColliderRequired = piece.Dimensions.IsSlopedRoof || piece.Dimensions.IsStair || piece.Dimensions.IsRamp;
+                    bool meshColliderRequired = piece.Dimensions.IsSlopedRoof || piece.Dimensions.IsStair || piece.Dimensions.IsRamp || piece.Dimensions.IsCurved;
                     Assert.That(collider.enabled, Is.EqualTo(!meshColliderRequired));
                     Assert.That(collider.center, Is.EqualTo(new Vector3(0f, piece.Dimensions.Y * 0.5f, 0f)));
                     Assert.That(collider.size, Is.EqualTo(new Vector3(piece.Dimensions.X, piece.Dimensions.Y, piece.Dimensions.Z)));
@@ -67,6 +71,9 @@ namespace Aedifica.Tests.PlayMode
 
                     // Aim at each piece, independent of screen resolution.
                     Vector3 center = view.transform.position + Vector3.up * piece.Dimensions.Y * 0.5f;
+                    if (piece.Dimensions.IsArch)
+                        center += view.transform.rotation * Vector3.left *
+                            (piece.Dimensions.X * 0.5f - piece.Dimensions.AsArch().PierWidth * 0.5f);
                     camera.transform.position = center + (piece.Type == PieceType.Column
                         ? new Vector3(0f, 1f, -10f) : new Vector3(0f, 10f, -3f));
                     camera.transform.LookAt(center);
@@ -79,7 +86,7 @@ namespace Aedifica.Tests.PlayMode
                     Assert.That(interaction.SelectedPieceId, Is.EqualTo(piece.Id));
                 }
                 Assert.That(block && wall && slab && column && beam && parapet &&
-                    flatRoof && shedRoof && gableRoof && hipRoof && stair && ramp, Is.True);
+                    flatRoof && shedRoof && gableRoof && hipRoof && stair && ramp && arch && vault && dome, Is.True);
 
                 PieceId stairId = PieceId.Parse("40000000000000000000000000000001");
                 Assert.That(lab.World.TryGet(stairId, out PieceData stairBefore), Is.True);

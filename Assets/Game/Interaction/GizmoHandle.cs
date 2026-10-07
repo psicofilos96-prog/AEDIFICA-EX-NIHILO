@@ -22,6 +22,12 @@ namespace Aedifica.Interaction
                 ? (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Thickness" : "Depth")
             : TargetPieceType == PieceType.Stair || TargetPieceType == PieceType.Ramp
                 ? (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Height" : "Run")
+            : TargetPieceType == PieceType.Arch
+                ? (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Height" : "Depth")
+            : TargetPieceType == PieceType.Vault
+                ? (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Height" : "Length")
+            : TargetPieceType == PieceType.Dome
+                ? (Axis == ManipulationAxis.Y ? "Rise" : "Diameter")
                 : (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Height" : "Depth");
 
         public void Configure(ManipulationMode mode, ManipulationAxis axis, int faceSign = 1)
