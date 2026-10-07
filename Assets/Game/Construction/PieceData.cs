@@ -15,6 +15,10 @@ namespace Aedifica.Construction
         public ColumnDimensions ColumnDimensions => Dimensions.AsColumn();
         public BeamDimensions BeamDimensions => Dimensions.AsBeam();
         public ParapetDimensions ParapetDimensions => Dimensions.AsParapet();
+        public FlatRoofDimensions FlatRoofDimensions => Dimensions.AsFlatRoof();
+        public ShedRoofDimensions ShedRoofDimensions => Dimensions.AsShedRoof();
+        public GableRoofDimensions GableRoofDimensions => Dimensions.AsGableRoof();
+        public HipRoofDimensions HipRoofDimensions => Dimensions.AsHipRoof();
 
         public PieceData(PieceId id, PieceTransform transform, BlockDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
@@ -27,6 +31,14 @@ namespace Aedifica.Construction
         public PieceData(PieceId id, PieceTransform transform, BeamDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
         public PieceData(PieceId id, PieceTransform transform, ParapetDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, FlatRoofDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, ShedRoofDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, GableRoofDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, HipRoofDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
 
         // Keep the P0.2 constructor while rejecting a mismatched semantic type.
@@ -67,5 +79,10 @@ namespace Aedifica.Construction
         public PieceData WithColumnDimensions(ColumnDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithBeamDimensions(BeamDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithParapetDimensions(ParapetDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithFlatRoofDimensions(FlatRoofDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithShedRoofDimensions(ShedRoofDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithGableRoofDimensions(GableRoofDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithHipRoofDimensions(HipRoofDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithRise(float rise) => WithDimensions(Dimensions.WithRise(rise));
     }
 }

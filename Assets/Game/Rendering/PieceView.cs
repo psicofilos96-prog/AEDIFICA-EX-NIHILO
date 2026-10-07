@@ -17,6 +17,7 @@ namespace Aedifica.Rendering
         private MeshFilter meshFilter;
         private MeshRenderer meshRenderer;
         private BoxCollider boxCollider;
+        private MeshCollider roofCollider;
         private MaterialPropertyBlock propertyBlock;
 
         private void Awake()
@@ -51,8 +52,23 @@ namespace Aedifica.Rendering
             }
             if (ownedMesh == null || !dimensions.Equals(piece.Dimensions))
             {
-                Mesh replacement = BlockMeshFactory.Build(BlockGeometryGenerator.GeneratePiece(piece.Dimensions));
+                Mesh replacement = BlockMeshFactory.Build(piece.Dimensions.IsSlopedRoof
+                    ? RoofGeometryGenerator.Generate(piece.Dimensions)
+                    : BlockGeometryGenerator.GeneratePiece(piece.Dimensions));
                 meshFilter.sharedMesh = replacement;
+                if (piece.Dimensions.IsSlopedRoof)
+                {
+                    if (roofCollider == null) roofCollider = gameObject.GetComponent<MeshCollider>() ?? gameObject.AddComponent<MeshCollider>();
+                    roofCollider.sharedMesh = null;
+                    roofCollider.sharedMesh = replacement;
+                    roofCollider.enabled = true;
+                    boxCollider.enabled = false;
+                }
+                else
+                {
+                    boxCollider.enabled = true;
+                    if (roofCollider != null) roofCollider.enabled = false;
+                }
                 if (ownedMesh != null) Destroy(ownedMesh);
                 ownedMesh = replacement;
                 dimensions = piece.Dimensions;

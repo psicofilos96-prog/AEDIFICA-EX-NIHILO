@@ -55,6 +55,19 @@ namespace Aedifica.Tests.PlayMode
                     Assert.That(newView.transform.localScale, Is.EqualTo(Vector3.one));
                     newView.SetSelected(false);
                 }
+                foreach (PieceId roofId in new[] {
+                    PieceId.Parse("20000000000000000000000000000001"),
+                    PieceId.Parse("20000000000000000000000000000002"),
+                    PieceId.Parse("20000000000000000000000000000003"),
+                    PieceId.Parse("20000000000000000000000000000004") })
+                {
+                    Assert.That(lab.TryGetView(roofId, out PieceView roofView), Is.True);
+                    Mesh roofMesh = roofView.GetComponent<MeshFilter>().sharedMesh;
+                    roofView.SetSelected(true);
+                    Assert.That(lab.CycleMaterial(roofId), Is.True);
+                    Assert.That(roofView.GetComponent<MeshFilter>().sharedMesh, Is.SameAs(roofMesh));
+                    roofView.SetSelected(false);
+                }
 
                 Mesh mesh = w.GetComponent<MeshFilter>().sharedMesh;
                 w.SetSelected(true);

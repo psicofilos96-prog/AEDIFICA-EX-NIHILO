@@ -17,6 +17,9 @@ namespace Aedifica.Interaction
                 ? (Axis == ManipulationAxis.X ? "Length" : Axis == ManipulationAxis.Y ? "Height" : "Width")
             : TargetPieceType == PieceType.Parapet
                 ? (Axis == ManipulationAxis.X ? "Length" : Axis == ManipulationAxis.Y ? "Height" : "Thickness")
+            : TargetPieceType == PieceType.FlatRoof || TargetPieceType == PieceType.ShedRoof ||
+              TargetPieceType == PieceType.GableRoof || TargetPieceType == PieceType.HipRoof
+                ? (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Thickness" : "Depth")
                 : (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Height" : "Depth");
 
         public void Configure(ManipulationMode mode, ManipulationAxis axis, int faceSign = 1)

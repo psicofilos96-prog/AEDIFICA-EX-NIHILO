@@ -114,6 +114,13 @@ namespace Aedifica.Interaction
             if (moving.Kind == GeometricSnapKind.Surface)
             {
                 if (Vector3.Dot(moving.Normal, target.Normal) > -0.999f) return false;
+                if (target.Triangle)
+                {
+                    Vector3 a = target.A - (target.U + target.V) / 3f;
+                    point = ClosestPointOnTriangle(moving.A, a, a + target.U, a + target.V);
+                    correction = point - moving.A;
+                    return true;
+                }
                 Vector3 offset = moving.A - target.A;
                 point = target.A + target.U * Mathf.Clamp(Vector3.Dot(offset, target.U) / target.U.sqrMagnitude, -1f, 1f)
                     + target.V * Mathf.Clamp(Vector3.Dot(offset, target.V) / target.V.sqrMagnitude, -1f, 1f);
@@ -132,6 +139,29 @@ namespace Aedifica.Interaction
             point = target.A + b * t;
             correction = point - movingPoint;
             return true;
+        }
+
+        // Closest point on an actual roof triangle, including edge and vertex regions.
+        private static Vector3 ClosestPointOnTriangle(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector3 ab = b - a, ac = c - a, ap = p - a;
+            float d1 = Vector3.Dot(ab, ap), d2 = Vector3.Dot(ac, ap);
+            if (d1 <= 0f && d2 <= 0f) return a;
+            Vector3 bp = p - b;
+            float d3 = Vector3.Dot(ab, bp), d4 = Vector3.Dot(ac, bp);
+            if (d3 >= 0f && d4 <= d3) return b;
+            float vc = d1 * d4 - d3 * d2;
+            if (vc <= 0f && d1 >= 0f && d3 <= 0f) return a + ab * (d1 / (d1 - d3));
+            Vector3 cp = p - c;
+            float d5 = Vector3.Dot(ab, cp), d6 = Vector3.Dot(ac, cp);
+            if (d6 >= 0f && d5 <= d6) return c;
+            float vb = d5 * d2 - d1 * d6;
+            if (vb <= 0f && d2 >= 0f && d6 <= 0f) return a + ac * (d2 / (d2 - d6));
+            float va = d3 * d6 - d5 * d4;
+            if (va <= 0f && d4 - d3 >= 0f && d5 - d6 >= 0f)
+                return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+            float denominator = 1f / (va + vb + vc);
+            return a + ab * (vb * denominator) + ac * (vc * denominator);
         }
     }
 }

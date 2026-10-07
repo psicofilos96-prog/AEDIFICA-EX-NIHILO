@@ -31,8 +31,9 @@ namespace Aedifica.Tests.PlayMode
                 labObject.SetActive(true);
                 yield return null;
 
-                Assert.That(lab.World.Count, Is.GreaterThanOrEqualTo(10));
+                Assert.That(lab.World.Count, Is.GreaterThanOrEqualTo(14));
                 bool block = false, wall = false, slab = false, column = false, beam = false, parapet = false;
+                bool flatRoof = false, shedRoof = false, gableRoof = false, hipRoof = false;
                 foreach (PieceData piece in lab.World.Pieces)
                 {
                     block |= piece.Type == PieceType.Block;
@@ -41,14 +42,25 @@ namespace Aedifica.Tests.PlayMode
                     column |= piece.Type == PieceType.Column;
                     beam |= piece.Type == PieceType.Beam;
                     parapet |= piece.Type == PieceType.Parapet;
+                    flatRoof |= piece.Type == PieceType.FlatRoof;
+                    shedRoof |= piece.Type == PieceType.ShedRoof;
+                    gableRoof |= piece.Type == PieceType.GableRoof;
+                    hipRoof |= piece.Type == PieceType.HipRoof;
                     Assert.That(lab.TryGetView(piece.Id, out PieceView view), Is.True);
                     Assert.That(view.Id, Is.EqualTo(piece.Id));
                     Assert.That(view.transform.localScale, Is.EqualTo(Vector3.one));
                     Assert.That(view.GetComponent<MeshFilter>().sharedMesh, Is.Not.Null);
                     BoxCollider collider = view.GetComponent<BoxCollider>();
-                    Assert.That(collider.enabled, Is.True);
+                    Assert.That(collider.enabled, Is.EqualTo(!piece.Dimensions.IsSlopedRoof));
                     Assert.That(collider.center, Is.EqualTo(new Vector3(0f, piece.Dimensions.Y * 0.5f, 0f)));
                     Assert.That(collider.size, Is.EqualTo(new Vector3(piece.Dimensions.X, piece.Dimensions.Y, piece.Dimensions.Z)));
+                    if (piece.Dimensions.IsSlopedRoof)
+                    {
+                        MeshCollider roofCollider = view.GetComponent<MeshCollider>();
+                        Assert.That(roofCollider, Is.Not.Null);
+                        Assert.That(roofCollider.enabled, Is.True);
+                        Assert.That(roofCollider.sharedMesh, Is.SameAs(view.GetComponent<MeshFilter>().sharedMesh));
+                    }
 
                     // Aim at each piece, independent of screen resolution.
                     Vector3 center = view.transform.position + Vector3.up * piece.Dimensions.Y * 0.5f;
@@ -63,7 +75,31 @@ namespace Aedifica.Tests.PlayMode
                     interaction.PointerUp(pointer);
                     Assert.That(interaction.SelectedPieceId, Is.EqualTo(piece.Id));
                 }
-                Assert.That(block && wall && slab && column && beam && parapet, Is.True);
+                Assert.That(block && wall && slab && column && beam && parapet &&
+                    flatRoof && shedRoof && gableRoof && hipRoof, Is.True);
+
+                PieceId hipId = PieceId.Parse("20000000000000000000000000000004");
+                Assert.That(lab.World.TryGet(hipId, out PieceData hipBefore), Is.True);
+                Assert.That(lab.TryGetView(hipId, out PieceView hipView), Is.True);
+                Vector3 hipCenter = hipView.transform.position + Vector3.up * hipBefore.Dimensions.Y * 0.5f;
+                camera.transform.position = hipCenter + new Vector3(0f, 10f, -3f);
+                camera.transform.LookAt(hipCenter);
+                Vector3 hipScreen = camera.WorldToScreenPoint(hipCenter);
+                Vector2 hipPointer = new Vector2(hipScreen.x, hipScreen.y);
+                interaction.PointerDown(hipPointer);
+                interaction.PointerUp(hipPointer);
+                Assert.That(interaction.SelectedPieceId, Is.EqualTo(hipId));
+                Mesh oldRoofMesh = hipView.GetComponent<MeshFilter>().sharedMesh;
+                var adjustRise = typeof(ConstructionLabInteraction).GetMethod("AdjustSelectedRoofRise",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                Assert.That(adjustRise, Is.Not.Null);
+                adjustRise.Invoke(interaction, new object[] { 0.1f });
+                Assert.That(lab.World.TryGet(hipId, out PieceData hipAfter), Is.True);
+                Assert.That(hipAfter.Dimensions.Rise, Is.EqualTo(hipBefore.Dimensions.Rise + 0.1f).Within(0.00001f));
+                Assert.That(hipView.GetComponent<MeshFilter>().sharedMesh, Is.Not.SameAs(oldRoofMesh));
+                Assert.That(hipView.GetComponent<MeshCollider>().sharedMesh,
+                    Is.SameAs(hipView.GetComponent<MeshFilter>().sharedMesh));
+                Assert.That(hipView.transform.localScale, Is.EqualTo(Vector3.one));
 
                 PieceId wallId = PieceId.Parse("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
                 Assert.That(lab.World.TryGet(wallId, out PieceData original), Is.True);

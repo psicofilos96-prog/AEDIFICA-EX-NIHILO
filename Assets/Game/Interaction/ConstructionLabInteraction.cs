@@ -84,6 +84,8 @@ namespace Aedifica.Interaction
                 if (keyboard.tKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Surface);
                 if (keyboard.hKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Edge);
                 if (keyboard.pKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Endpoint);
+                if (keyboard.pageUpKey.wasPressedThisFrame) AdjustSelectedRoofRise(0.1f);
+                if (keyboard.pageDownKey.wasPressedThisFrame) AdjustSelectedRoofRise(-0.1f);
             }
 
             Mouse mouse = Mouse.current;
@@ -170,6 +172,15 @@ namespace Aedifica.Interaction
                 Debug.Log($"{kind} Snap: {(enabled ? "ON" : "OFF")}", this);
             }
             catch (ArgumentOutOfRangeException exception) { Debug.LogError(exception.Message, this); }
+        }
+
+        private void AdjustSelectedRoofRise(float step)
+        {
+            if (!(selection.SelectedPieceId is PieceId id) || !lab.World.TryGet(id, out PieceData piece) ||
+                !piece.Dimensions.IsSlopedRoof) return;
+            float rise = Mathf.Max(ManipulationSession.MinimumDimension, piece.Dimensions.Rise + step);
+            PieceData replacement = piece.WithRise(rise);
+            if (lab.Apply(replacement)) Debug.Log($"Roof Rise: {rise:F2} m", this);
         }
 
         public bool TryPickPieceAt(Vector2 pointer, out PieceId id)
