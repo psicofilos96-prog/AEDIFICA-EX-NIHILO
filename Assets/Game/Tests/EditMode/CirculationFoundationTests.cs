@@ -10,7 +10,15 @@ namespace Aedifica.Tests.EditMode
 {
     public sealed class CirculationFoundationTests
     {
+        // Quaternion.Angle uses acos of a float dot product. A one-to-two ULP
+        // deficit near dot=1 can report roughly 0.056-0.079 degrees.
+        private const float OrientationToleranceDegrees = 0.1f;
         private static readonly PieceId Id = PieceId.Parse("40000000000000000000000000000011");
+
+        private static void AssertOrientationUnchanged(Quaternion expected, Quaternion actual)
+        {
+            Assert.That(Quaternion.Angle(expected, actual), Is.LessThan(OrientationToleranceDegrees));
+        }
         private static PieceData Stair(int steps = 10, float yaw = 0f) => new PieceData(Id,
             new PieceTransform(new Vector3(3f, 1f, -4f), Quaternion.Euler(0f, yaw, 0f)),
             new StairDimensions(2f, 2f, 3f, steps));
@@ -147,7 +155,7 @@ namespace Aedifica.Tests.EditMode
                     Assert.That(Vector3.Distance(oldOpposite, newOpposite), Is.LessThan(0.0001f),
                         $"{piece.Type} {axis} {sign} yaw={yaw} desired={desired}");
                     Assert.That(result.MaterialId, Is.EqualTo(piece.MaterialId));
-                    Assert.That(result.Transform.Rotation, Is.EqualTo(piece.Transform.Rotation));
+                    AssertOrientationUnchanged(piece.Transform.Rotation, result.Transform.Rotation);
                     if (!ramp) Assert.That(result.Dimensions.StepCount, Is.EqualTo(10));
                     else Assert.That(result.Dimensions.RampThickness, Is.EqualTo(0.2f));
                 }
@@ -155,10 +163,20 @@ namespace Aedifica.Tests.EditMode
             var move = new ManipulationSession(piece, ManipulationMode.Move, ManipulationAxis.X,
                 Vector2.zero, Vector2.right, 100f).Evaluate(new Vector2(100f, 0f));
             Assert.That(move.Transform.Position.x, Is.EqualTo(piece.Transform.Position.x + 1f));
+            AssertOrientationUnchanged(piece.Transform.Rotation, move.Transform.Rotation);
             var rotate = new ManipulationSession(piece, ManipulationMode.Rotate, ManipulationAxis.Y,
                 Vector2.zero, Vector2.right, 1f).Evaluate(new Vector2(90f, 0f));
             Assert.That(rotate.Transform.Position, Is.EqualTo(piece.Transform.Position));
             Assert.That(rotate.Dimensions, Is.EqualTo(piece.Dimensions));
+        }
+
+        [Test]
+        public void OrientationInvariantRejectsRealRotation()
+        {
+            Quaternion original = Stair(yaw: 45f).Transform.Rotation;
+            Quaternion changed = Quaternion.AngleAxis(1f, Vector3.up) * original;
+            Assert.That(Quaternion.Angle(original, changed), Is.GreaterThan(OrientationToleranceDegrees));
+            Assert.Throws<AssertionException>(() => AssertOrientationUnchanged(original, changed));
         }
 
         [Test]
