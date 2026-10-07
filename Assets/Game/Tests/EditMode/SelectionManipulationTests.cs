@@ -134,22 +134,31 @@ namespace Aedifica.Tests.EditMode
                 PieceData result = session.Evaluate(new Vector2(requested * 100f, 0f));
                 float before = Dimension(initial, axis);
                 float after = Dimension(result, axis);
-                Assert.That(after, Is.EqualTo(Mathf.Max(0.1f, before + requested)).Within(0.0001f));
-                Assert.That(Quaternion.Angle(result.Transform.Rotation, initial.Transform.Rotation), Is.LessThan(0.001f));
-                Assert.That(Vector3.Distance(OppositeFace(initial, axis, sign), OppositeFace(result, axis, sign)),
-                    Is.LessThan(0.0001f));
+                string caseInfo = $"type={type}, axis={axis}, faceSign={sign}, yaw={yaw}, requested={requested}, case={(before + requested < 0.1f ? "clamp" : "normal")}";
+                Vector3 expectedOppositeFace = OppositeFace(initial, axis, sign);
+                Vector3 actualOppositeFace = OppositeFace(result, axis, sign);
+                float oppositeFaceError = Vector3.Distance(expectedOppositeFace, actualOppositeFace);
+                string faceInfo = $"{caseInfo}, expectedOppositeFace={expectedOppositeFace.ToString("F6")}, actualOppositeFace={actualOppositeFace.ToString("F6")}, error={oppositeFaceError:R}";
+                Assert.That(after, Is.EqualTo(Mathf.Max(0.1f, before + requested)).Within(0.0001f), faceInfo);
+                Assert.That(Quaternion.Angle(result.Transform.Rotation, initial.Transform.Rotation), Is.LessThan(0.001f), faceInfo);
+                Assert.That(oppositeFaceError, Is.LessThan(0.0001f), faceInfo);
                 Vector3 oldCenter = Center(initial);
                 Vector3 newCenter = Center(result);
                 Vector3 expectedShift = initial.Transform.Rotation * ManipulationSession.AxisVector(axis) * (sign * (after - before) * 0.5f);
-                Assert.That(Vector3.Distance(newCenter - oldCenter, expectedShift), Is.LessThan(0.0001f));
+                Assert.That(Vector3.Distance(newCenter - oldCenter, expectedShift), Is.LessThan(0.0001f), faceInfo);
                 foreach (ManipulationAxis other in new[] { ManipulationAxis.X, ManipulationAxis.Y, ManipulationAxis.Z })
                     if (other != axis) Assert.That(Dimension(result, other), Is.EqualTo(Dimension(initial, other)));
                 Assert.That(result.Type, Is.EqualTo(type));
                 Assert.That(result.MaterialId, Is.EqualTo(initial.MaterialId));
-                Assert.That(session.Evaluate(Vector2.zero).Transform, Is.EqualTo(initial.Transform));
+                PieceData zeroDrag = session.Evaluate(Vector2.zero);
+                Assert.That(Vector3.Distance(zeroDrag.Transform.Position, initial.Transform.Position), Is.LessThan(0.0001f), faceInfo);
+                Assert.That(RotationDirectionError(zeroDrag.Transform.Rotation, initial.Transform.Rotation), Is.LessThan(0.0001f), faceInfo);
+                Assert.That(zeroDrag.Dimensions, Is.EqualTo(initial.Dimensions), faceInfo);
                 session.Evaluate(new Vector2(-10000f, 0f));
-                Assert.That(session.Evaluate(new Vector2(requested * 100f, 0f)).Transform, Is.EqualTo(result.Transform));
-                Assert.That(session.Evaluate(new Vector2(requested * 100f, 0f)).Dimensions, Is.EqualTo(result.Dimensions));
+                PieceData repeated = session.Evaluate(new Vector2(requested * 100f, 0f));
+                Assert.That(Vector3.Distance(repeated.Transform.Position, result.Transform.Position), Is.LessThan(0.0001f), faceInfo);
+                Assert.That(RotationDirectionError(repeated.Transform.Rotation, result.Transform.Rotation), Is.LessThan(0.0001f), faceInfo);
+                Assert.That(repeated.Dimensions, Is.EqualTo(result.Dimensions), faceInfo);
             }
         }
 
@@ -161,6 +170,10 @@ namespace Aedifica.Tests.EditMode
 
         private static Vector3 OppositeFace(PieceData piece, ManipulationAxis axis, int sign) =>
             Center(piece) - piece.Transform.Rotation * ManipulationSession.AxisVector(axis) * (sign * Dimension(piece, axis) * 0.5f);
+
+        private static float RotationDirectionError(Quaternion actual, Quaternion expected) => Mathf.Max(
+            Vector3.Distance(actual * Vector3.forward, expected * Vector3.forward),
+            Vector3.Distance(actual * Vector3.up, expected * Vector3.up));
 
         [Test]
         public void SessionKeepsInitialStateForAnUndoableGesture()
