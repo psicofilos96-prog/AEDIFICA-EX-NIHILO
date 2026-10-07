@@ -11,6 +11,10 @@ namespace Aedifica.Construction
         public float Thickness { get; }
         public float InnerDiameter => Diameter - 2f * Thickness;
         public float InnerRise => Rise - Thickness;
+        public static float MinimumDiameter(float thickness) =>
+            CurvedDimensionPrecision.ResizableMinimum(2f * thickness, MaximumExtent);
+        public static float MinimumRise(float thickness) =>
+            CurvedDimensionPrecision.ResizableMinimum(thickness, MaximumExtent);
         public DomeDimensions(float diameter, float rise, float thickness)
         {
             Check(diameter, nameof(diameter)); Check(rise, nameof(rise)); Check(thickness, nameof(thickness));
@@ -18,7 +22,9 @@ namespace Aedifica.Construction
             Diameter = diameter; Rise = rise; Thickness = thickness;
         }
         public bool IsValid => Valid(Diameter) && Valid(Rise) && Valid(Thickness) && Fits(Diameter, Rise, Thickness);
-        private static bool Fits(float d, float r, float t) => d >= 2f * t + 0.1f && r >= t + 0.1f;
+        private static bool Fits(float d, float r, float t) =>
+            d - 2f * t >= CurvedDimensionPrecision.MinimumClearance &&
+            r - t >= CurvedDimensionPrecision.MinimumClearance;
         private static bool Valid(float value) => value >= 0.1f && value <= MaximumExtent &&
             !float.IsNaN(value) && !float.IsInfinity(value);
         private static void Check(float value, string name) { if (!Valid(value)) throw new ArgumentOutOfRangeException(name); }

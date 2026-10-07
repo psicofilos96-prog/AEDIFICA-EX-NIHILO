@@ -81,12 +81,12 @@ namespace Aedifica.Construction
                     stepCount >= 1 && stepCount <= StairDimensions.MaximumStepCount
                 : IsRamp ? Rise == 0f && stepCount == 0 && Positive(height) && Positive(profileThickness)
                 : IsArch ? stepCount == 0 && archPierWidth >= 0.1f &&
-                    X >= 2f * archPierWidth + 0.1f && profileThickness >= 0.1f &&
-                    Rise >= 0.1f && Y >= Rise + profileThickness + 0.1f
+                    X - 2f * archPierWidth >= 0.1f && profileThickness >= 0.1f &&
+                    Rise >= 0.1f && Y - profileThickness - Rise >= 0.1f
                 : IsVault ? Rise == 0f && stepCount == 0 && profileThickness >= 0.1f &&
-                    X >= 2f * profileThickness + 0.1f && Y >= profileThickness + 0.1f
+                    X - 2f * profileThickness >= 0.1f && Y - profileThickness >= 0.1f
                 : IsDome ? Rise == 0f && stepCount == 0 && X == Z && profileThickness >= 0.1f &&
-                    X >= 2f * profileThickness + 0.1f && Y >= profileThickness + 0.1f
+                    X - 2f * profileThickness >= 0.1f && Y - profileThickness >= 0.1f
                 : Rise == 0f && profileThickness == 0f && stepCount == 0 && archPierWidth == 0f);
         private static bool Positive(float value) => value > 0f && !float.IsNaN(value) && !float.IsInfinity(value);
 
@@ -114,9 +114,12 @@ namespace Aedifica.Construction
         {
             if (axis < 0 || axis > 2) throw new ArgumentOutOfRangeException(nameof(axis));
             if (IsRamp && axis == 1) return RampThickness + 0.1f;
-            if (IsArch) return axis == 0 ? 2f * archPierWidth + 0.1f : axis == 1 ? Rise + profileThickness + 0.1f : 0.1f;
-            if (IsVault) return axis == 0 ? 2f * profileThickness + 0.1f : axis == 1 ? profileThickness + 0.1f : 0.1f;
-            if (IsDome) return axis == 1 ? profileThickness + 0.1f : 2f * profileThickness + 0.1f;
+            if (IsArch) return axis == 0 ? ArchDimensions.MinimumWidth(archPierWidth) :
+                axis == 1 ? ArchDimensions.MinimumHeight(Rise, profileThickness) : 0.1f;
+            if (IsVault) return axis == 0 ? VaultDimensions.MinimumWidth(profileThickness) :
+                axis == 1 ? VaultDimensions.MinimumHeight(profileThickness) : 0.1f;
+            if (IsDome) return axis == 1 ? DomeDimensions.MinimumRise(profileThickness) :
+                DomeDimensions.MinimumDiameter(profileThickness);
             return 0.1f;
         }
 

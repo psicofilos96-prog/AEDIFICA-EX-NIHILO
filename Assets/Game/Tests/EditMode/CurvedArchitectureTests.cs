@@ -155,22 +155,158 @@ namespace Aedifica.Tests.EditMode
             Assert.That(CurvedProfile.DomeOuter(dome, CurvedProfile.DomeLatitudeSegments, 0).y, Is.EqualTo(0f));
         }
 
-        [TestCase(PieceType.Arch)]
-        [TestCase(PieceType.Vault)]
-        [TestCase(PieceType.Dome)]
-        public void FaceResizeClampsAtEachSemanticMinimum(PieceType type)
+        [TestCase(PieceType.Arch, ManipulationAxis.X)]
+        [TestCase(PieceType.Arch, ManipulationAxis.Y)]
+        [TestCase(PieceType.Arch, ManipulationAxis.Z)]
+        [TestCase(PieceType.Vault, ManipulationAxis.X)]
+        [TestCase(PieceType.Vault, ManipulationAxis.Y)]
+        [TestCase(PieceType.Vault, ManipulationAxis.Z)]
+        [TestCase(PieceType.Dome, ManipulationAxis.X)]
+        [TestCase(PieceType.Dome, ManipulationAxis.Y)]
+        [TestCase(PieceType.Dome, ManipulationAxis.Z)]
+        public void FaceResizeClampsAtEachSemanticMinimum(PieceType type, ManipulationAxis axis)
         {
             PieceData piece = Piece(type);
+            var session = new ManipulationSession(piece, ManipulationMode.Resize, axis,
+                Vector2.zero, Vector2.right, 100f, resizeMode: ResizeMode.Face);
+            PieceData resized = session.ResizeToDimension(0f);
+            float dimension = axis == ManipulationAxis.X ? resized.Dimensions.X :
+                axis == ManipulationAxis.Y ? resized.Dimensions.Y : resized.Dimensions.Z;
+            Assert.That(dimension, Is.EqualTo(piece.Dimensions.MinimumForAxis((int)axis)).Within(0.00001f),
+                $"{type} {axis}: Thickness={Thickness(piece)}");
+            Assert.That(resized.Dimensions.IsValid, Is.True, $"{type} {axis}");
+            Assert.That(Thickness(resized), Is.EqualTo(Thickness(piece)), $"{type} {axis}");
+            AssertFiniteNondegenerate(CurvedGeometryGenerator.Generate(resized.Dimensions));
+        }
+
+        private static float Thickness(PieceData piece) => piece.Dimensions.IsArch
+            ? piece.ArchDimensions.CrownThickness : piece.Dimensions.IsVault
+                ? piece.VaultDimensions.Thickness : piece.DomeDimensions.Thickness;
+
+        private static void AssertFiniteNondegenerate(BlockGeometry mesh)
+        {
+            for (int i = 0; i < mesh.Triangles.Length; i += 3)
+            {
+                Vector3 a = mesh.Vertices[mesh.Triangles[i]];
+                Vector3 b = mesh.Vertices[mesh.Triangles[i + 1]];
+                Vector3 c = mesh.Vertices[mesh.Triangles[i + 2]];
+                foreach (Vector3 vertex in new[] { a, b, c })
+                    Assert.That(float.IsNaN(vertex.x) || float.IsInfinity(vertex.x) ||
+                        float.IsNaN(vertex.y) || float.IsInfinity(vertex.y) ||
+                        float.IsNaN(vertex.z) || float.IsInfinity(vertex.z), Is.False);
+                Assert.That(Vector3.Cross(b - a, c - a).sqrMagnitude, Is.GreaterThan(1e-18f));
+            }
+        }
+
+        [TestCase(PieceType.Vault, 0.1f)]
+        [TestCase(PieceType.Vault, 0.25f)]
+        [TestCase(PieceType.Vault, 1f)]
+        [TestCase(PieceType.Dome, 0.1f)]
+        [TestCase(PieceType.Dome, 0.25f)]
+        [TestCase(PieceType.Dome, 1f)]
+        public void ThicknessDependentBoundsAcceptSafeProfilesAndRejectInsufficientClearance(PieceType type, float thickness)
+        {
+            float minimumHorizontal = type == PieceType.Vault
+                ? VaultDimensions.MinimumWidth(thickness) : DomeDimensions.MinimumDiameter(thickness);
+            float minimumVertical = type == PieceType.Vault
+                ? VaultDimensions.MinimumHeight(thickness) : DomeDimensions.MinimumRise(thickness);
+            if (type == PieceType.Vault)
+            {
+                var valid = new VaultDimensions(minimumHorizontal, minimumVertical, 1f, thickness);
+                Assert.That(valid.InnerWidth, Is.GreaterThanOrEqualTo(0.1f));
+                Assert.That(valid.InnerRise, Is.GreaterThanOrEqualTo(0.1f));
+                Assert.Throws<ArgumentException>(() => new VaultDimensions(minimumHorizontal - 0.001f, thickness + 1f, 1f, thickness));
+                Assert.Throws<ArgumentException>(() => new VaultDimensions(2f * thickness + 1f, minimumVertical - 0.001f, 1f, thickness));
+                if (thickness == 0.25f)
+                    Assert.Throws<ArgumentException>(() => new VaultDimensions(4f, thickness + 0.1f, 1f, thickness),
+                        "The old nominal minimum rounded to an inner rise below 0.1 m.");
+                for (int step = 0; step <= CurvedProfile.VaultSegments; step++)
+                    Assert.That(Vector2.Distance(CurvedProfile.VaultOuter(valid, step),
+                        CurvedProfile.VaultInner(valid, step)), Is.GreaterThan(0f), $"Vault section {step}");
+                AssertFiniteNondegenerate(CurvedGeometryGenerator.Generate(new PieceDimensions(valid)));
+            }
+            else
+            {
+                var valid = new DomeDimensions(minimumHorizontal, minimumVertical, thickness);
+                Assert.That(valid.InnerDiameter, Is.GreaterThanOrEqualTo(0.1f));
+                Assert.That(valid.InnerRise, Is.GreaterThanOrEqualTo(0.1f));
+                Assert.Throws<ArgumentException>(() => new DomeDimensions(minimumHorizontal - 0.001f, thickness + 1f, thickness));
+                Assert.Throws<ArgumentException>(() => new DomeDimensions(2f * thickness + 1f, minimumVertical - 0.001f, thickness));
+                if (thickness == 0.25f)
+                    Assert.Throws<ArgumentException>(() => new DomeDimensions(4f, thickness + 0.1f, thickness),
+                        "The old nominal minimum rounded to an inner rise below 0.1 m.");
+                for (int latitude = 0; latitude <= CurvedProfile.DomeLatitudeSegments; latitude++)
+                    Assert.That(Vector3.Distance(CurvedProfile.DomeOuter(valid, latitude, 0),
+                        CurvedProfile.DomeInner(valid, latitude, 0)), Is.GreaterThan(0f),
+                        $"Dome latitude {latitude}");
+                AssertFiniteNondegenerate(CurvedGeometryGenerator.Generate(new PieceDimensions(valid)));
+            }
+        }
+
+        [Test]
+        public void ArchOpeningAndSpringUseTheirOwnSemanticBounds()
+        {
+            const float pier = 0.6f, rise = 1.2f, crown = 0.25f;
+            float width = ArchDimensions.MinimumWidth(pier);
+            float height = ArchDimensions.MinimumHeight(rise, crown);
+            var valid = new ArchDimensions(width, height, 0.7f, pier, rise, crown);
+            Assert.That(valid.OpeningWidth, Is.GreaterThanOrEqualTo(0.1f));
+            Assert.That(valid.SpringHeight, Is.GreaterThanOrEqualTo(0.1f));
+            Assert.Throws<ArgumentException>(() => new ArchDimensions(width - 0.001f, 3f, 0.7f, pier, rise, crown));
+            Assert.Throws<ArgumentException>(() => new ArchDimensions(4f, height - 0.001f, 0.7f, pier, rise, crown));
+            AssertFiniteNondegenerate(CurvedGeometryGenerator.Generate(new PieceDimensions(valid)));
+            PieceData original = Piece(PieceType.Arch);
             foreach (ManipulationAxis axis in new[] { ManipulationAxis.X, ManipulationAxis.Y, ManipulationAxis.Z })
             {
-                var session = new ManipulationSession(piece, ManipulationMode.Resize, axis,
-                    Vector2.zero, Vector2.right, 100f, resizeMode: ResizeMode.Face);
-                PieceData resized = session.ResizeToDimension(0f);
-                float dimension = axis == ManipulationAxis.X ? resized.Dimensions.X :
-                    axis == ManipulationAxis.Y ? resized.Dimensions.Y : resized.Dimensions.Z;
-                Assert.That(dimension, Is.EqualTo(piece.Dimensions.MinimumForAxis((int)axis)).Within(0.00001f));
-                Assert.That(resized.Dimensions.IsValid, Is.True);
-                Assert.That(CurvedGeometryGenerator.Generate(resized.Dimensions).Triangles.Length, Is.GreaterThan(0));
+                var center = new ManipulationSession(original, ManipulationMode.Resize, axis,
+                    Vector2.zero, Vector2.right, 100f);
+                PieceData clamped = center.Evaluate(Vector2.left * 10000f);
+                Assert.That(clamped.Transform.Position, Is.EqualTo(original.Transform.Position));
+                Assert.That(clamped.Dimensions.IsValid, Is.True, $"Arch bilateral {axis}");
+                Assert.That(clamped.ArchDimensions.PierWidth, Is.EqualTo(pier));
+                Assert.That(clamped.ArchDimensions.CrownThickness, Is.EqualTo(crown));
+            }
+        }
+
+        [TestCase(PieceType.Vault, 45f)]
+        [TestCase(PieceType.Vault, 90f)]
+        [TestCase(PieceType.Dome, 45f)]
+        [TestCase(PieceType.Dome, 90f)]
+        public void DragBeyondMinimumKeepsValidProfileAndOppositeFace(PieceType type, float yaw)
+        {
+            PieceData piece = Piece(type, yaw);
+            foreach (ManipulationAxis axis in new[] { ManipulationAxis.X, ManipulationAxis.Y, ManipulationAxis.Z })
+            {
+                float initial = axis == ManipulationAxis.X ? piece.Dimensions.X :
+                    axis == ManipulationAxis.Y ? piece.Dimensions.Y : piece.Dimensions.Z;
+                float minimum = piece.Dimensions.MinimumForAxis((int)axis);
+                var bilateral = new ManipulationSession(piece, ManipulationMode.Resize, axis,
+                    Vector2.zero, Vector2.right, 100f);
+                PieceData centerResult = bilateral.Evaluate(Vector2.left * 10000f);
+                Assert.That(centerResult.Transform.Position, Is.EqualTo(piece.Transform.Position));
+                Assert.That(centerResult.Dimensions.IsValid, Is.True);
+                Assert.That(Thickness(centerResult), Is.EqualTo(Thickness(piece)));
+                foreach (int sign in new[] { -1, 1 })
+                {
+                    var face = new ManipulationSession(piece, ManipulationMode.Resize, axis,
+                        Vector2.zero, Vector2.right, 100f, resizeMode: ResizeMode.Face, faceSign: sign);
+                    PieceData resized = face.Evaluate(Vector2.left * 10000f);
+                    float actual = axis == ManipulationAxis.X ? resized.Dimensions.X :
+                        axis == ManipulationAxis.Y ? resized.Dimensions.Y : resized.Dimensions.Z;
+                    Assert.That(actual, Is.EqualTo(minimum).Within(0.00001f), $"{type} {axis} sign={sign} yaw={yaw}");
+                    Assert.That(resized.Dimensions.IsValid, Is.True);
+                    Assert.That(Thickness(resized), Is.EqualTo(Thickness(piece)));
+                    Vector3 direction = piece.Transform.Rotation * ManipulationSession.AxisVector(axis);
+                    float oldOffset = axis == ManipulationAxis.Y ? (sign > 0 ? 0f : initial) : -sign * initial * 0.5f;
+                    float newOffset = axis == ManipulationAxis.Y ? (sign > 0 ? 0f : actual) : -sign * actual * 0.5f;
+                    Vector3 before = piece.Transform.Position + direction * oldOffset;
+                    Vector3 after = resized.Transform.Position + direction * newOffset;
+                    Assert.That(Vector3.Distance(before, after), Is.LessThan(0.0001f),
+                        $"{type} {axis} sign={sign} yaw={yaw}");
+                    Assert.That(Quaternion.Angle(piece.Transform.Rotation, resized.Transform.Rotation),
+                        Is.LessThan(RotationToleranceDegrees));
+                    AssertFiniteNondegenerate(CurvedGeometryGenerator.Generate(resized.Dimensions));
+                }
             }
         }
 

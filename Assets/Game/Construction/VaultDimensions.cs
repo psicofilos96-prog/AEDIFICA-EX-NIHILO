@@ -12,6 +12,10 @@ namespace Aedifica.Construction
         public float Thickness { get; }
         public float InnerWidth => Width - 2f * Thickness;
         public float InnerRise => Height - Thickness;
+        public static float MinimumWidth(float thickness) =>
+            CurvedDimensionPrecision.ResizableMinimum(2f * thickness, MaximumExtent);
+        public static float MinimumHeight(float thickness) =>
+            CurvedDimensionPrecision.ResizableMinimum(thickness, MaximumExtent);
         public VaultDimensions(float width, float height, float length, float thickness)
         {
             Check(width, nameof(width)); Check(height, nameof(height)); Check(length, nameof(length)); Check(thickness, nameof(thickness));
@@ -19,7 +23,9 @@ namespace Aedifica.Construction
             Width = width; Height = height; Length = length; Thickness = thickness;
         }
         public bool IsValid => Valid(Width) && Valid(Height) && Valid(Length) && Valid(Thickness) && Fits(Width, Height, Thickness);
-        private static bool Fits(float w, float h, float t) => w >= 2f * t + 0.1f && h >= t + 0.1f;
+        private static bool Fits(float w, float h, float t) =>
+            w - 2f * t >= CurvedDimensionPrecision.MinimumClearance &&
+            h - t >= CurvedDimensionPrecision.MinimumClearance;
         private static bool Valid(float value) => value >= 0.1f && value <= MaximumExtent &&
             !float.IsNaN(value) && !float.IsInfinity(value);
         private static void Check(float value, string name) { if (!Valid(value)) throw new ArgumentOutOfRangeException(name); }
