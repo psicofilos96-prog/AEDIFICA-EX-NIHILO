@@ -68,6 +68,16 @@ namespace Aedifica.Tests.PlayMode
                 Assert.That(lab.World.TryGet(id, out PieceData stored), Is.True);
                 Assert.That(stored, Is.SameAs(resizedPiece));
                 Assert.That(view.transform.localScale, Is.EqualTo(Vector3.one));
+                var snapSettings = new SnapSettings { EndpointSnapEnabled = true };
+                var moveSession = new ManipulationSession(resizedPiece, ManipulationMode.Move, ManipulationAxis.X,
+                    Vector2.zero, Vector2.right, 100f, snapSettings);
+                PieceData nearbyTarget = new PieceData(PieceId.Parse("99999999999999999999999999999999"),
+                    new PieceTransform(resizedPiece.Transform.Position + new Vector3(resizedPiece.Dimensions.X + 0.1f, 0f, 0f),
+                        resizedPiece.Transform.Rotation), resizedPiece.Dimensions);
+                PieceData geometricallySnapped = new SnapResolver().Resolve(resizedPiece, moveSession, snapSettings,
+                    new[] { nearbyTarget });
+                Assert.That(lab.Apply(geometricallySnapped), Is.True);
+                Assert.That(view.transform.localScale, Is.EqualTo(Vector3.one));
                 var gizmoObject = new GameObject("Test Rotation Gizmo");
                 try
                 {

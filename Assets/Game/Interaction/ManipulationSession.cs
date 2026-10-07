@@ -81,6 +81,17 @@ namespace Aedifica.Interaction
             PieceDimensions old = InitialPiece.Dimensions;
             float current = Axis == ManipulationAxis.X ? old.X : Axis == ManipulationAxis.Y ? old.Y : old.Z;
             float dimension = Mathf.Max(MinimumDimension, current + meters);
+            return ResizeToDimension(dimension);
+        }
+
+        // A geometric correction is applied to the raw, already grid-snapped result.
+        // It still reconstructs the piece from the gesture's initial PieceData.
+        public PieceData ResizeToDimension(float requestedDimension)
+        {
+            if (Mode != ManipulationMode.Resize) throw new InvalidOperationException("Only Resize can set a dimension.");
+            PieceDimensions old = InitialPiece.Dimensions;
+            float current = Axis == ManipulationAxis.X ? old.X : Axis == ManipulationAxis.Y ? old.Y : old.Z;
+            float dimension = Mathf.Max(MinimumDimension, requestedDimension);
             PieceData resized = InitialPiece.WithDimensions(old.Resize((int)Axis, dimension));
             if (ResizeBehavior == ResizeMode.Center) return resized;
 

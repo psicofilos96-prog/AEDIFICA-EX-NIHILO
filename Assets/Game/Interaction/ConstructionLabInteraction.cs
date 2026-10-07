@@ -38,6 +38,7 @@ namespace Aedifica.Interaction
         private ManipulationMode mode;
         private ResizeMode resizeMode;
         private ManipulationSession session;
+        private readonly SnapResolver geometricSnap = new SnapResolver();
         private PieceId? pressedPieceId;
         private Vector2 pressPosition;
         private bool draggingPan;
@@ -80,6 +81,9 @@ namespace Aedifica.Interaction
                     lab.CycleMaterial(selectedMaterialPiece);
                 if (keyboard.gKey.wasPressedThisFrame) TogglePositionSnap();
                 if (keyboard.rKey.wasPressedThisFrame) ToggleRotationSnap();
+                if (keyboard.tKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Surface);
+                if (keyboard.hKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Edge);
+                if (keyboard.pKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Endpoint);
             }
 
             Mouse mouse = Mouse.current;
@@ -135,6 +139,7 @@ namespace Aedifica.Interaction
                 float pixelsPerMeter = Mathf.Max(1f, projected.magnitude);
                 session = new ManipulationSession(selectedPiece, nearestHandle.Mode, nearestHandle.Axis,
                     pointer, projected.normalized, pixelsPerMeter, snapSettings, resizeMode, nearestHandle.FaceSign);
+                geometricSnap.Reset();
                 cityCamera.SetPanSuppressed(true);
             }
             else if (nearestPiece != null) pressedPieceId = nearestPiece.Id;
@@ -150,6 +155,20 @@ namespace Aedifica.Interaction
         private void ToggleRotationSnap()
         {
             try { Debug.Log($"Angle Snap: {(snapSettings.ToggleRotation() ? "ON" : "OFF")} ({snapSettings.RotationIncrementDegrees}°)", this); }
+            catch (ArgumentOutOfRangeException exception) { Debug.LogError(exception.Message, this); }
+        }
+
+        private void ToggleGeometricSnap(GeometricSnapKind kind)
+        {
+            try
+            {
+                snapSettings.ValidateGeometric();
+                bool enabled;
+                if (kind == GeometricSnapKind.Surface) enabled = snapSettings.SurfaceSnapEnabled = !snapSettings.SurfaceSnapEnabled;
+                else if (kind == GeometricSnapKind.Edge) enabled = snapSettings.EdgeSnapEnabled = !snapSettings.EdgeSnapEnabled;
+                else enabled = snapSettings.EndpointSnapEnabled = !snapSettings.EndpointSnapEnabled;
+                Debug.Log($"{kind} Snap: {(enabled ? "ON" : "OFF")}", this);
+            }
             catch (ArgumentOutOfRangeException exception) { Debug.LogError(exception.Message, this); }
         }
 
@@ -224,6 +243,17 @@ namespace Aedifica.Interaction
         private void UpdateManipulation(Vector2 pointer)
         {
             PieceData changed = session.Evaluate(pointer);
+            if (snapSettings.HasGeometricSnap && (session.Mode == ManipulationMode.Move ||
+                session.Mode == ManipulationMode.Resize && session.ResizeBehavior == ResizeMode.Face))
+            {
+                changed = geometricSnap.Resolve(changed, session, snapSettings, lab.World.Pieces);
+                if (geometricSnap.HasTarget)
+                {
+                    Vector3 marker = geometricSnap.TargetPoint;
+                    Debug.DrawLine(marker - Vector3.up * 0.2f, marker + Vector3.up * 0.2f, Color.cyan);
+                    Debug.DrawLine(marker - Vector3.right * 0.2f, marker + Vector3.right * 0.2f, Color.cyan);
+                }
+            }
             if (!lab.World.TryGet(changed.Id, out PieceData current)) return;
             if (changed.Transform.Equals(current.Transform) && changed.Dimensions.Equals(current.Dimensions)) return;
             lab.Apply(changed);
@@ -267,6 +297,7 @@ namespace Aedifica.Interaction
         private void EndManipulation()
         {
             session = null;
+            geometricSnap.Reset();
             if (cityCamera != null)
             {
                 cityCamera.EndPan();
