@@ -88,8 +88,8 @@ namespace Aedifica.Interaction
             Vector3 localBaseShift = AxisVector(Axis) * (FaceSign * actualChange * 0.5f);
             // PieceTransform.Position is the bottom-center of the mesh, not its geometric center.
             if (Axis == ManipulationAxis.Y) localBaseShift -= Vector3.up * (actualChange * 0.5f);
-            Vector3 position = InitialPiece.Transform.Position + InitialPiece.Transform.Rotation * localBaseShift;
-            return resized.WithTransform(new PieceTransform(position, InitialPiece.Transform.Rotation));
+            Vector3 faceResizedBasePosition = InitialPiece.Transform.Position + InitialPiece.Transform.Rotation * localBaseShift;
+            return resized.WithTransform(new PieceTransform(faceResizedBasePosition, InitialPiece.Transform.Rotation));
         }
 
         public static Vector3 AxisVector(ManipulationAxis axis)
