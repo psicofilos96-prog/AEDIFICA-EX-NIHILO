@@ -36,6 +36,7 @@ namespace Aedifica.Interaction
         private RuntimeGizmo gizmo;
         private readonly SelectionState selection = new SelectionState();
         private ManipulationMode mode;
+        private ResizeMode resizeMode;
         private ManipulationSession session;
         private PieceId? pressedPieceId;
         private Vector2 pressPosition;
@@ -70,6 +71,11 @@ namespace Aedifica.Interaction
                 if (keyboard.digit1Key.wasPressedThisFrame || keyboard.numpad1Key.wasPressedThisFrame) mode = ManipulationMode.Move;
                 if (keyboard.digit2Key.wasPressedThisFrame || keyboard.numpad2Key.wasPressedThisFrame) mode = ManipulationMode.Rotate;
                 if (keyboard.digit3Key.wasPressedThisFrame || keyboard.numpad3Key.wasPressedThisFrame) mode = ManipulationMode.Resize;
+                if (keyboard.fKey.wasPressedThisFrame)
+                {
+                    resizeMode = resizeMode == ResizeMode.Center ? ResizeMode.Face : ResizeMode.Center;
+                    Debug.Log($"Resize mode: {resizeMode}", this);
+                }
                 if (keyboard.mKey.wasPressedThisFrame && selection.SelectedPieceId is PieceId selectedMaterialPiece)
                     lab.CycleMaterial(selectedMaterialPiece);
                 if (keyboard.gKey.wasPressedThisFrame) TogglePositionSnap();
@@ -103,7 +109,7 @@ namespace Aedifica.Interaction
             }
             if (mouse.leftButton.wasReleasedThisFrame) PointerUp(pointer);
 
-            if (selection.SelectedPieceId is PieceId id && lab.World.TryGet(id, out PieceData piece)) gizmo.Show(piece, mode);
+            if (selection.SelectedPieceId is PieceId id && lab.World.TryGet(id, out PieceData piece)) gizmo.Show(piece, mode, resizeMode);
             else gizmo.Hide();
         }
 
@@ -121,13 +127,14 @@ namespace Aedifica.Interaction
                 selection.SelectedPieceId is PieceId selectedId && lab.World.TryGet(selectedId, out PieceData selectedPiece))
             {
                 Vector3 axis = ManipulationSession.AxisVector(nearestHandle.Axis);
-                if (nearestHandle.Mode == ManipulationMode.Resize) axis = selectedPiece.Transform.Rotation * axis;
+                if (nearestHandle.Mode == ManipulationMode.Resize)
+                    axis = selectedPiece.Transform.Rotation * axis * (resizeMode == ResizeMode.Face ? nearestHandle.FaceSign : 1);
                 Vector3 origin = selectedPiece.Transform.Position;
                 Vector3 screenDelta = sceneCamera.WorldToScreenPoint(origin + axis) - sceneCamera.WorldToScreenPoint(origin);
                 Vector2 projected = new Vector2(screenDelta.x, screenDelta.y);
                 float pixelsPerMeter = Mathf.Max(1f, projected.magnitude);
                 session = new ManipulationSession(selectedPiece, nearestHandle.Mode, nearestHandle.Axis,
-                    pointer, projected.normalized, pixelsPerMeter, snapSettings);
+                    pointer, projected.normalized, pixelsPerMeter, snapSettings, resizeMode, nearestHandle.FaceSign);
                 cityCamera.SetPanSuppressed(true);
             }
             else if (nearestPiece != null) pressedPieceId = nearestPiece.Id;

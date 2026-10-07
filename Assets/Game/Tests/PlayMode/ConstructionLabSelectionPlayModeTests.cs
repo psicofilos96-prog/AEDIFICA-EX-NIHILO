@@ -46,6 +46,28 @@ namespace Aedifica.Tests.PlayMode
                 interaction.PointerDown(pointer);
                 interaction.PointerUp(pointer);
                 Assert.That(interaction.SelectedPieceId, Is.EqualTo(id));
+                yield return null; // The interaction displays the selected piece's gizmo in Update.
+                GameObject interactionGizmo = GameObject.Find("Construction Gizmo");
+                Assert.That(interactionGizmo, Is.Not.Null);
+                GizmoHandle moveHandle = null;
+                foreach (GizmoHandle handle in interactionGizmo.GetComponentsInChildren<GizmoHandle>())
+                    if (handle.Mode == ManipulationMode.Move && handle.Axis == ManipulationAxis.X) moveHandle = handle;
+                Assert.That(moveHandle, Is.Not.Null);
+                Vector3 handleScreen = camera.WorldToScreenPoint(moveHandle.GetComponent<Renderer>().bounds.center);
+                var handlePointer = new Vector2(handleScreen.x, handleScreen.y);
+                interaction.PointerDown(handlePointer);
+                var sessionField = typeof(ConstructionLabInteraction).GetField("session", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var panField = typeof(ConstructionLabInteraction).GetField("draggingPan", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                Assert.That(sessionField.GetValue(interaction), Is.Not.Null);
+                Assert.That(panField.GetValue(interaction), Is.False);
+                interaction.PointerUp(handlePointer);
+                var faceSession = new ManipulationSession(piece, ManipulationMode.Resize, ManipulationAxis.X,
+                    Vector2.zero, Vector2.right, 100f, null, ResizeMode.Face, -1);
+                PieceData resizedPiece = faceSession.Evaluate(new Vector2(100f, 0f));
+                Assert.That(lab.Apply(resizedPiece), Is.True);
+                Assert.That(lab.World.TryGet(id, out PieceData stored), Is.True);
+                Assert.That(stored, Is.SameAs(resizedPiece));
+                Assert.That(view.transform.localScale, Is.EqualTo(Vector3.one));
                 var gizmoObject = new GameObject("Test Rotation Gizmo");
                 try
                 {
@@ -66,6 +88,41 @@ namespace Aedifica.Tests.PlayMode
                         Assert.That(visible.Axis, Is.EqualTo(ManipulationAxis.Y));
                         Assert.That(visible.GetComponent<Collider>().enabled, Is.True);
                     }
+                    gizmo.Show(piece, ManipulationMode.Resize, ResizeMode.Face);
+                    GizmoHandle[] faceHandles = gizmo.GetComponentsInChildren<GizmoHandle>();
+                    Assert.That(faceHandles.Length, Is.EqualTo(6));
+                    foreach (ManipulationAxis axis in new[] { ManipulationAxis.X, ManipulationAxis.Y, ManipulationAxis.Z })
+                    foreach (int sign in new[] { -1, 1 })
+                    {
+                        int count = 0;
+                        foreach (GizmoHandle face in faceHandles)
+                            if (face.Axis == axis && face.FaceSign == sign)
+                            {
+                                count++;
+                                Assert.That(face.Mode, Is.EqualTo(ManipulationMode.Resize));
+                                Assert.That(face.GetComponent<Collider>().enabled, Is.True);
+                            }
+                        Assert.That(count, Is.EqualTo(1));
+                    }
+                    foreach (PieceType type in new[] { PieceType.Block, PieceType.Wall, PieceType.Slab })
+                    {
+                        PieceData typedPiece = type == PieceType.Block ? piece
+                            : type == PieceType.Wall
+                                ? new PieceData(id, piece.Transform, new WallDimensions(3f, 2f, 0.2f))
+                                : new PieceData(id, piece.Transform, new SlabDimensions(3f, 0.2f, 2f));
+                        gizmo.Show(typedPiece, ManipulationMode.Resize, ResizeMode.Face);
+                        foreach (GizmoHandle face in gizmo.GetComponentsInChildren<GizmoHandle>())
+                        {
+                            string expectedDimension = type == PieceType.Wall
+                                ? (face.Axis == ManipulationAxis.X ? "Length" : face.Axis == ManipulationAxis.Y ? "Height" : "Thickness")
+                                : type == PieceType.Slab
+                                    ? (face.Axis == ManipulationAxis.X ? "Width" : face.Axis == ManipulationAxis.Y ? "Thickness" : "Depth")
+                                    : (face.Axis == ManipulationAxis.X ? "Width" : face.Axis == ManipulationAxis.Y ? "Height" : "Depth");
+                            Assert.That(face.SemanticDimension, Is.EqualTo(expectedDimension));
+                        }
+                    }
+                    gizmo.Show(piece, ManipulationMode.Resize, ResizeMode.Center);
+                    Assert.That(gizmo.GetComponentsInChildren<GizmoHandle>().Length, Is.EqualTo(3));
                 }
                 finally { Object.DestroyImmediate(gizmoObject); }
             }

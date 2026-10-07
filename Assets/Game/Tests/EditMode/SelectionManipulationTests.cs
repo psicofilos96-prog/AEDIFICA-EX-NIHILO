@@ -113,6 +113,55 @@ namespace Aedifica.Tests.EditMode
             Assert.That(BlockGeometryGenerator.Generate(resized.BlockDimensions).Bounds.min.y, Is.Zero);
         }
 
+        [TestCase(PieceType.Block)]
+        [TestCase(PieceType.Wall)]
+        [TestCase(PieceType.Slab)]
+        public void FaceResizeKeepsOppositeFaceFixedForAllAxesSignsRotationsAndClamps(PieceType type)
+        {
+            foreach (float yaw in new[] { 0f, 45f, 90f })
+            foreach (ManipulationAxis axis in new[] { ManipulationAxis.X, ManipulationAxis.Y, ManipulationAxis.Z })
+            foreach (int sign in new[] { 1, -1 })
+            foreach (float requested in new[] { 0.5f, -0.5f, -10f, -20f })
+            {
+                var transform = new PieceTransform(new Vector3(2f, 3f, 4f), Quaternion.Euler(0f, yaw, 0f));
+                PieceData initial = type == PieceType.Block
+                    ? new PieceData(IdA, transform, new BlockDimensions(2f, 1f, 3f))
+                    : type == PieceType.Wall
+                        ? new PieceData(IdA, transform, new WallDimensions(4f, 3f, 0.2f))
+                        : new PieceData(IdA, transform, new SlabDimensions(4f, 0.2f, 3f));
+                var session = new ManipulationSession(initial, ManipulationMode.Resize, axis,
+                    Vector2.zero, Vector2.right, 100f, null, ResizeMode.Face, sign);
+                PieceData result = session.Evaluate(new Vector2(requested * 100f, 0f));
+                float before = Dimension(initial, axis);
+                float after = Dimension(result, axis);
+                Assert.That(after, Is.EqualTo(Mathf.Max(0.1f, before + requested)).Within(0.0001f));
+                Assert.That(Quaternion.Angle(result.Transform.Rotation, initial.Transform.Rotation), Is.LessThan(0.001f));
+                Assert.That(Vector3.Distance(OppositeFace(initial, axis, sign), OppositeFace(result, axis, sign)),
+                    Is.LessThan(0.0001f));
+                Vector3 oldCenter = Center(initial);
+                Vector3 newCenter = Center(result);
+                Vector3 expectedShift = initial.Transform.Rotation * ManipulationSession.AxisVector(axis) * (sign * (after - before) * 0.5f);
+                Assert.That(Vector3.Distance(newCenter - oldCenter, expectedShift), Is.LessThan(0.0001f));
+                foreach (ManipulationAxis other in new[] { ManipulationAxis.X, ManipulationAxis.Y, ManipulationAxis.Z })
+                    if (other != axis) Assert.That(Dimension(result, other), Is.EqualTo(Dimension(initial, other)));
+                Assert.That(result.Type, Is.EqualTo(type));
+                Assert.That(result.MaterialId, Is.EqualTo(initial.MaterialId));
+                Assert.That(session.Evaluate(Vector2.zero).Transform, Is.EqualTo(initial.Transform));
+                session.Evaluate(new Vector2(-10000f, 0f));
+                Assert.That(session.Evaluate(new Vector2(requested * 100f, 0f)).Transform, Is.EqualTo(result.Transform));
+                Assert.That(session.Evaluate(new Vector2(requested * 100f, 0f)).Dimensions, Is.EqualTo(result.Dimensions));
+            }
+        }
+
+        private static float Dimension(PieceData piece, ManipulationAxis axis) =>
+            axis == ManipulationAxis.X ? piece.Dimensions.X : axis == ManipulationAxis.Y ? piece.Dimensions.Y : piece.Dimensions.Z;
+
+        private static Vector3 Center(PieceData piece) => piece.Transform.Position +
+            piece.Transform.Rotation * (Vector3.up * (piece.Dimensions.Y * 0.5f));
+
+        private static Vector3 OppositeFace(PieceData piece, ManipulationAxis axis, int sign) =>
+            Center(piece) - piece.Transform.Rotation * ManipulationSession.AxisVector(axis) * (sign * Dimension(piece, axis) * 0.5f);
+
         [Test]
         public void SessionKeepsInitialStateForAnUndoableGesture()
         {

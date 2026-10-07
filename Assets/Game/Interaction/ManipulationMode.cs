@@ -7,6 +7,8 @@ namespace Aedifica.Interaction
         Resize
     }
 
+    public enum ResizeMode { Center, Face }
+
     public enum ManipulationAxis
     {
         X,

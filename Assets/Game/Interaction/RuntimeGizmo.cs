@@ -6,6 +6,7 @@ namespace Aedifica.Interaction
     public sealed class RuntimeGizmo : MonoBehaviour
     {
         private readonly GizmoHandle[,] handles = new GizmoHandle[3, 3];
+        private readonly GizmoHandle[] negativeResizeHandles = new GizmoHandle[3];
         private UnityEngine.Camera sceneCamera;
         private readonly GizmoHandle[] rotationSegments = new GizmoHandle[24];
 
@@ -31,25 +32,29 @@ namespace Aedifica.Interaction
             CreateHandle(ManipulationMode.Resize, ManipulationAxis.X, PrimitiveType.Cube, Color.red, material);
             CreateHandle(ManipulationMode.Resize, ManipulationAxis.Y, PrimitiveType.Cube, Color.green, material);
             CreateHandle(ManipulationMode.Resize, ManipulationAxis.Z, PrimitiveType.Cube, Color.blue, material);
+            negativeResizeHandles[0] = CreateHandle(ManipulationMode.Resize, ManipulationAxis.X, PrimitiveType.Cube, Color.red, material, -1);
+            negativeResizeHandles[1] = CreateHandle(ManipulationMode.Resize, ManipulationAxis.Y, PrimitiveType.Cube, Color.green, material, -1);
+            negativeResizeHandles[2] = CreateHandle(ManipulationMode.Resize, ManipulationAxis.Z, PrimitiveType.Cube, Color.blue, material, -1);
             gameObject.SetActive(false);
         }
 
-        private void CreateHandle(ManipulationMode mode, ManipulationAxis axis, PrimitiveType primitive, Color color, Material material)
+        private GizmoHandle CreateHandle(ManipulationMode mode, ManipulationAxis axis, PrimitiveType primitive, Color color, Material material, int faceSign = 1)
         {
             GameObject handleObject = GameObject.CreatePrimitive(primitive);
-            handleObject.name = $"{mode} {axis} Handle";
+            handleObject.name = $"{mode} {(faceSign > 0 ? "+" : "-")}{axis} Handle";
             handleObject.transform.SetParent(transform, false);
-            handleObject.transform.localScale = Vector3.one * 0.32f;
+            handleObject.transform.localScale = Vector3.one * (faceSign > 0 ? 0.32f : 0.26f);
             handleObject.GetComponent<MeshRenderer>().sharedMaterial = material;
             var properties = new MaterialPropertyBlock();
-            properties.SetColor("_BaseColor", color);
+            properties.SetColor("_BaseColor", faceSign > 0 ? color : color * 0.55f);
             handleObject.GetComponent<MeshRenderer>().SetPropertyBlock(properties);
             GizmoHandle handle = handleObject.AddComponent<GizmoHandle>();
-            handle.Configure(mode, axis);
-            handles[(int)mode, (int)axis] = handle;
+            handle.Configure(mode, axis, faceSign);
+            if (faceSign > 0) handles[(int)mode, (int)axis] = handle;
+            return handle;
         }
 
-        public void Show(PieceData piece, ManipulationMode mode)
+        public void Show(PieceData piece, ManipulationMode mode, ResizeMode resizeMode = ResizeMode.Center)
         {
             gameObject.SetActive(true);
             float distance = Vector3.Distance(sceneCamera.transform.position, piece.Transform.Position);
@@ -62,12 +67,22 @@ namespace Aedifica.Interaction
             for (int m = 0; m < 3; m++)
                 for (int a = 0; a < 3; a++)
                     if (handles[m, a] != null) handles[m, a].gameObject.SetActive(m == (int)mode);
+            foreach (GizmoHandle handle in negativeResizeHandles)
+                handle.gameObject.SetActive(resize && resizeMode == ResizeMode.Face);
 
             if (resize)
             {
+                for (int axis = 0; axis < 3; axis++)
+                {
+                    handles[(int)mode, axis].SetPieceType(piece.Type);
+                    negativeResizeHandles[axis].SetPieceType(piece.Type);
+                }
                 handles[(int)mode, 0].transform.localPosition = new Vector3(piece.Dimensions.X * 0.5f / scale + 0.5f, piece.Dimensions.Y * 0.5f / scale, 0f);
                 handles[(int)mode, 1].transform.localPosition = new Vector3(0f, piece.Dimensions.Y / scale + 0.5f, 0f);
                 handles[(int)mode, 2].transform.localPosition = new Vector3(0f, piece.Dimensions.Y * 0.5f / scale, piece.Dimensions.Z * 0.5f / scale + 0.5f);
+                negativeResizeHandles[0].transform.localPosition = new Vector3(-piece.Dimensions.X * 0.5f / scale - 0.5f, piece.Dimensions.Y * 0.5f / scale, 0f);
+                negativeResizeHandles[1].transform.localPosition = new Vector3(0f, -0.5f, 0f);
+                negativeResizeHandles[2].transform.localPosition = new Vector3(0f, piece.Dimensions.Y * 0.5f / scale, -piece.Dimensions.Z * 0.5f / scale - 0.5f);
             }
             else
             {

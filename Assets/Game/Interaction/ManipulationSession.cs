@@ -12,6 +12,8 @@ namespace Aedifica.Interaction
         public PieceData InitialPiece { get; }
         public ManipulationMode Mode { get; }
         public ManipulationAxis Axis { get; }
+        public ResizeMode ResizeBehavior { get; }
+        public int FaceSign { get; }
 
         private readonly Vector2 startPointer;
         private readonly Vector2 screenAxis;
@@ -23,7 +25,8 @@ namespace Aedifica.Interaction
         private readonly float initialYaw;
 
         public ManipulationSession(PieceData initialPiece, ManipulationMode mode, ManipulationAxis axis,
-            Vector2 startPointer, Vector2 screenAxis, float pixelsPerMeter, SnapSettings snapSettings = null)
+            Vector2 startPointer, Vector2 screenAxis, float pixelsPerMeter, SnapSettings snapSettings = null,
+            ResizeMode resizeMode = ResizeMode.Center, int faceSign = 1)
         {
             InitialPiece = initialPiece ?? throw new ArgumentNullException(nameof(initialPiece));
             if (mode != ManipulationMode.Move && mode != ManipulationMode.Rotate && mode != ManipulationMode.Resize) throw new ArgumentOutOfRangeException(nameof(mode));
@@ -31,8 +34,12 @@ namespace Aedifica.Interaction
             if (mode == ManipulationMode.Rotate && axis != ManipulationAxis.Y) throw new ArgumentException("Rotate supports Y only.", nameof(axis));
             if (mode != ManipulationMode.Rotate && (!IsFinite(pixelsPerMeter) || pixelsPerMeter <= 0f))
                 throw new ArgumentOutOfRangeException(nameof(pixelsPerMeter));
+            if (resizeMode != ResizeMode.Center && resizeMode != ResizeMode.Face) throw new ArgumentOutOfRangeException(nameof(resizeMode));
+            if (faceSign != 1 && faceSign != -1) throw new ArgumentOutOfRangeException(nameof(faceSign));
             Mode = mode;
             Axis = axis;
+            ResizeBehavior = resizeMode;
+            FaceSign = faceSign;
             this.startPointer = startPointer;
             this.screenAxis = screenAxis.sqrMagnitude > 0f ? screenAxis.normalized : Vector2.right;
             this.pixelsPerMeter = pixelsPerMeter;
@@ -73,7 +80,16 @@ namespace Aedifica.Interaction
 
             PieceDimensions old = InitialPiece.Dimensions;
             float current = Axis == ManipulationAxis.X ? old.X : Axis == ManipulationAxis.Y ? old.Y : old.Z;
-            return InitialPiece.WithDimensions(old.Resize((int)Axis, Mathf.Max(MinimumDimension, current + meters)));
+            float dimension = Mathf.Max(MinimumDimension, current + meters);
+            PieceData resized = InitialPiece.WithDimensions(old.Resize((int)Axis, dimension));
+            if (ResizeBehavior == ResizeMode.Center) return resized;
+
+            float actualChange = dimension - current;
+            Vector3 localBaseShift = AxisVector(Axis) * (FaceSign * actualChange * 0.5f);
+            // PieceTransform.Position is the bottom-center of the mesh, not its geometric center.
+            if (Axis == ManipulationAxis.Y) localBaseShift -= Vector3.up * (actualChange * 0.5f);
+            Vector3 position = InitialPiece.Transform.Position + InitialPiece.Transform.Rotation * localBaseShift;
+            return resized.WithTransform(new PieceTransform(position, InitialPiece.Transform.Rotation));
         }
 
         public static Vector3 AxisVector(ManipulationAxis axis)
