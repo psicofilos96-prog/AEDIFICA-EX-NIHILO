@@ -80,7 +80,7 @@ namespace Aedifica.Interaction
 
             PieceDimensions old = InitialPiece.Dimensions;
             float current = Axis == ManipulationAxis.X ? old.X : Axis == ManipulationAxis.Y ? old.Y : old.Z;
-            float dimension = Mathf.Max(MinimumDimension, current + meters);
+            float dimension = Mathf.Max(old.MinimumForAxis((int)Axis), current + meters);
             return ResizeToDimension(dimension);
         }
 
@@ -91,11 +91,12 @@ namespace Aedifica.Interaction
             if (Mode != ManipulationMode.Resize) throw new InvalidOperationException("Only Resize can set a dimension.");
             PieceDimensions old = InitialPiece.Dimensions;
             float current = Axis == ManipulationAxis.X ? old.X : Axis == ManipulationAxis.Y ? old.Y : old.Z;
-            float dimension = Mathf.Max(MinimumDimension, requestedDimension);
+            float dimension = Mathf.Max(old.MinimumForAxis((int)Axis), requestedDimension);
             PieceData resized = InitialPiece.WithDimensions(old.Resize((int)Axis, dimension));
             if (ResizeBehavior == ResizeMode.Center) return resized;
 
-            float actualChange = dimension - current;
+            float actualChange = (Axis == ManipulationAxis.X ? resized.Dimensions.X
+                : Axis == ManipulationAxis.Y ? resized.Dimensions.Y : resized.Dimensions.Z) - current;
             Vector3 localBaseShift = AxisVector(Axis) * (FaceSign * actualChange * 0.5f);
             // PieceTransform.Position is the bottom-center of the mesh, not its geometric center.
             if (Axis == ManipulationAxis.Y) localBaseShift -= Vector3.up * (actualChange * 0.5f);

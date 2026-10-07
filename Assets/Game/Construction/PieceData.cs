@@ -19,6 +19,8 @@ namespace Aedifica.Construction
         public ShedRoofDimensions ShedRoofDimensions => Dimensions.AsShedRoof();
         public GableRoofDimensions GableRoofDimensions => Dimensions.AsGableRoof();
         public HipRoofDimensions HipRoofDimensions => Dimensions.AsHipRoof();
+        public StairDimensions StairDimensions => Dimensions.AsStair();
+        public RampDimensions RampDimensions => Dimensions.AsRamp();
 
         public PieceData(PieceId id, PieceTransform transform, BlockDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
@@ -39,6 +41,10 @@ namespace Aedifica.Construction
         public PieceData(PieceId id, PieceTransform transform, GableRoofDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
         public PieceData(PieceId id, PieceTransform transform, HipRoofDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, StairDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, RampDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
 
         // Keep the P0.2 constructor while rejecting a mismatched semantic type.
@@ -83,6 +89,9 @@ namespace Aedifica.Construction
         public PieceData WithShedRoofDimensions(ShedRoofDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithGableRoofDimensions(GableRoofDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithHipRoofDimensions(HipRoofDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithStairDimensions(StairDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithRampDimensions(RampDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithStepCount(int steps) => WithDimensions(Dimensions.WithStepCount(steps));
         public PieceData WithRise(float rise) => WithDimensions(Dimensions.WithRise(rise));
     }
 }

@@ -12,6 +12,8 @@ namespace Aedifica.Construction
         FlatRoof = 7,
         ShedRoof = 8,
         GableRoof = 9,
-        HipRoof = 10
+        HipRoof = 10,
+        Stair = 11,
+        Ramp = 12
     }
 }

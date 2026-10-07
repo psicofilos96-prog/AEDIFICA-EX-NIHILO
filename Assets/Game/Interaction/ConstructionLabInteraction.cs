@@ -86,6 +86,8 @@ namespace Aedifica.Interaction
                 if (keyboard.pKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Endpoint);
                 if (keyboard.pageUpKey.wasPressedThisFrame) AdjustSelectedRoofRise(0.1f);
                 if (keyboard.pageDownKey.wasPressedThisFrame) AdjustSelectedRoofRise(-0.1f);
+                if (keyboard.leftBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(-1);
+                if (keyboard.rightBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(1);
             }
 
             Mouse mouse = Mouse.current;
@@ -181,6 +183,15 @@ namespace Aedifica.Interaction
             float rise = Mathf.Max(ManipulationSession.MinimumDimension, piece.Dimensions.Rise + step);
             PieceData replacement = piece.WithRise(rise);
             if (lab.Apply(replacement)) Debug.Log($"Roof Rise: {rise:F2} m", this);
+        }
+
+        private void AdjustSelectedStepCount(int delta)
+        {
+            if (!(selection.SelectedPieceId is PieceId id) || !lab.World.TryGet(id, out PieceData piece) ||
+                !piece.Dimensions.IsStair) return;
+            int steps = Mathf.Clamp(piece.Dimensions.StepCount + delta, 1, StairDimensions.MaximumStepCount);
+            if (steps == piece.Dimensions.StepCount) return;
+            if (lab.Apply(piece.WithStepCount(steps))) Debug.Log($"Stair StepCount: {steps}", this);
         }
 
         public bool TryPickPieceAt(Vector2 pointer, out PieceId id)

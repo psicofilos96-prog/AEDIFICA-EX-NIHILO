@@ -67,7 +67,7 @@ namespace Aedifica.Interaction
                         if ((correction - outward * along).magnitude >
                             (sameLockedFeature ? settings.ReleaseDistance : settings.CaptureDistance)) continue;
                         float rawDimension = Dimension(raw, session.Axis);
-                        if (rawDimension + along < ManipulationSession.MinimumDimension - 0.00001f) continue;
+                        if (rawDimension + along < raw.Dimensions.MinimumForAxis((int)session.Axis) - 0.00001f) continue;
                         correction = outward * along;
                     }
                     float distance = geometricDistance;

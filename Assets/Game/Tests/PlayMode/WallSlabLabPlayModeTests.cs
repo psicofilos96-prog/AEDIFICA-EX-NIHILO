@@ -33,7 +33,7 @@ namespace Aedifica.Tests.PlayMode
 
                 Assert.That(lab.World.Count, Is.GreaterThanOrEqualTo(14));
                 bool block = false, wall = false, slab = false, column = false, beam = false, parapet = false;
-                bool flatRoof = false, shedRoof = false, gableRoof = false, hipRoof = false;
+                bool flatRoof = false, shedRoof = false, gableRoof = false, hipRoof = false, stair = false, ramp = false;
                 foreach (PieceData piece in lab.World.Pieces)
                 {
                     block |= piece.Type == PieceType.Block;
@@ -46,15 +46,18 @@ namespace Aedifica.Tests.PlayMode
                     shedRoof |= piece.Type == PieceType.ShedRoof;
                     gableRoof |= piece.Type == PieceType.GableRoof;
                     hipRoof |= piece.Type == PieceType.HipRoof;
+                    stair |= piece.Type == PieceType.Stair;
+                    ramp |= piece.Type == PieceType.Ramp;
                     Assert.That(lab.TryGetView(piece.Id, out PieceView view), Is.True);
                     Assert.That(view.Id, Is.EqualTo(piece.Id));
                     Assert.That(view.transform.localScale, Is.EqualTo(Vector3.one));
                     Assert.That(view.GetComponent<MeshFilter>().sharedMesh, Is.Not.Null);
                     BoxCollider collider = view.GetComponent<BoxCollider>();
-                    Assert.That(collider.enabled, Is.EqualTo(!piece.Dimensions.IsSlopedRoof));
+                    bool meshColliderRequired = piece.Dimensions.IsSlopedRoof || piece.Dimensions.IsStair || piece.Dimensions.IsRamp;
+                    Assert.That(collider.enabled, Is.EqualTo(!meshColliderRequired));
                     Assert.That(collider.center, Is.EqualTo(new Vector3(0f, piece.Dimensions.Y * 0.5f, 0f)));
                     Assert.That(collider.size, Is.EqualTo(new Vector3(piece.Dimensions.X, piece.Dimensions.Y, piece.Dimensions.Z)));
-                    if (piece.Dimensions.IsSlopedRoof)
+                    if (meshColliderRequired)
                     {
                         MeshCollider roofCollider = view.GetComponent<MeshCollider>();
                         Assert.That(roofCollider, Is.Not.Null);
@@ -76,7 +79,31 @@ namespace Aedifica.Tests.PlayMode
                     Assert.That(interaction.SelectedPieceId, Is.EqualTo(piece.Id));
                 }
                 Assert.That(block && wall && slab && column && beam && parapet &&
-                    flatRoof && shedRoof && gableRoof && hipRoof, Is.True);
+                    flatRoof && shedRoof && gableRoof && hipRoof && stair && ramp, Is.True);
+
+                PieceId stairId = PieceId.Parse("40000000000000000000000000000001");
+                Assert.That(lab.World.TryGet(stairId, out PieceData stairBefore), Is.True);
+                Assert.That(lab.TryGetView(stairId, out PieceView stairView), Is.True);
+                Vector3 stairCenter = stairView.transform.position + Vector3.up * stairBefore.Dimensions.Y * 0.5f;
+                camera.transform.position = stairCenter + new Vector3(0f, 10f, -3f);
+                camera.transform.LookAt(stairCenter);
+                Vector3 stairScreen = camera.WorldToScreenPoint(stairCenter);
+                Vector2 stairPointer = new Vector2(stairScreen.x, stairScreen.y);
+                interaction.PointerDown(stairPointer);
+                interaction.PointerUp(stairPointer);
+                Assert.That(interaction.SelectedPieceId, Is.EqualTo(stairId));
+                Mesh oldStairMesh = stairView.GetComponent<MeshFilter>().sharedMesh;
+                var adjustSteps = typeof(ConstructionLabInteraction).GetMethod("AdjustSelectedStepCount",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                Assert.That(adjustSteps, Is.Not.Null);
+                adjustSteps.Invoke(interaction, new object[] { 1 });
+                Assert.That(lab.World.TryGet(stairId, out PieceData stairAfter), Is.True);
+                Assert.That(stairAfter.Dimensions.StepCount, Is.EqualTo(stairBefore.Dimensions.StepCount + 1));
+                Assert.That(stairView.GetComponent<MeshFilter>().sharedMesh, Is.Not.SameAs(oldStairMesh));
+                Assert.That(stairView.GetComponent<MeshCollider>().sharedMesh,
+                    Is.SameAs(stairView.GetComponent<MeshFilter>().sharedMesh));
+                Assert.That(stairAfter.Transform.Position, Is.EqualTo(stairBefore.Transform.Position));
+                Assert.That(stairAfter.MaterialId, Is.EqualTo(stairBefore.MaterialId));
 
                 PieceId hipId = PieceId.Parse("20000000000000000000000000000004");
                 Assert.That(lab.World.TryGet(hipId, out PieceData hipBefore), Is.True);

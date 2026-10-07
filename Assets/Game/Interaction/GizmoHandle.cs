@@ -20,6 +20,8 @@ namespace Aedifica.Interaction
             : TargetPieceType == PieceType.FlatRoof || TargetPieceType == PieceType.ShedRoof ||
               TargetPieceType == PieceType.GableRoof || TargetPieceType == PieceType.HipRoof
                 ? (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Thickness" : "Depth")
+            : TargetPieceType == PieceType.Stair || TargetPieceType == PieceType.Ramp
+                ? (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Height" : "Run")
                 : (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Height" : "Depth");
 
         public void Configure(ManipulationMode mode, ManipulationAxis axis, int faceSign = 1)

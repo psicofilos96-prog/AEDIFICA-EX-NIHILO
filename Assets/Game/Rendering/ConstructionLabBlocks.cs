@@ -65,6 +65,10 @@ namespace Aedifica.Rendering
                 new PieceTransform(new Vector3(4f, 0f, 17f), Quaternion.identity), new GableRoofDimensions(4f, 3f, 0.25f, 1.2f)).WithMaterial(LabMaterialIds.Brick));
             world.Add(new PieceData(PieceId.Parse("20000000000000000000000000000004"),
                 new PieceTransform(new Vector3(12f, 0f, 17f), Quaternion.identity), new HipRoofDimensions(4f, 3f, 0.25f, 1.2f)).WithMaterial(LabMaterialIds.Plaster));
+            world.Add(new PieceData(PieceId.Parse("40000000000000000000000000000001"),
+                new PieceTransform(new Vector3(-8f, 0f, -22f), Quaternion.identity), new StairDimensions(2f, 2f, 3f, 10)).WithMaterial(LabMaterialIds.Stone));
+            world.Add(new PieceData(PieceId.Parse("40000000000000000000000000000002"),
+                new PieceTransform(new Vector3(8f, 0f, -22f), Quaternion.identity), new RampDimensions(2f, 2f, 4f, 0.2f)).WithMaterial(LabMaterialIds.Brick));
 
             foreach (PieceData piece in world.Pieces)
             {

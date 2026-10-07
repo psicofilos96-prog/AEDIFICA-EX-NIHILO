@@ -9,14 +9,20 @@ namespace Aedifica.Construction
         public PieceType Type { get; }
         public float X { get; }
         private readonly float height;
-        public float Y => IsSlopedRoof ? roofThickness + Rise : height;
+        public float Y => IsSlopedRoof ? profileThickness + Rise : IsRamp ? height + profileThickness : height;
         public float Z { get; }
         // Rise is authoritative for sloped roofs; Y is the derived total height.
         public float Rise { get; }
-        private readonly float roofThickness;
+        private readonly float profileThickness;
+        private readonly int stepCount;
         public bool IsRoof => Type == PieceType.FlatRoof || IsSlopedRoof;
         public bool IsSlopedRoof => Type == PieceType.ShedRoof || Type == PieceType.GableRoof || Type == PieceType.HipRoof;
-        public float RoofThickness => IsRoof ? roofThickness : throw new InvalidOperationException("Piece is not a roof.");
+        public bool IsStair => Type == PieceType.Stair;
+        public bool IsRamp => Type == PieceType.Ramp;
+        public float RoofThickness => IsRoof ? profileThickness : throw new InvalidOperationException("Piece is not a roof.");
+        public float RampThickness => IsRamp ? profileThickness : throw new InvalidOperationException("Piece is not a ramp.");
+        public float RampHeight => IsRamp ? height : throw new InvalidOperationException("Piece is not a ramp.");
+        public int StepCount => IsStair ? stepCount : throw new InvalidOperationException("Piece is not a stair.");
 
         public PieceDimensions(BlockDimensions dimensions) : this(PieceType.Block, dimensions.Width, dimensions.Height, dimensions.Depth, dimensions.IsValid) { }
         public PieceDimensions(WallDimensions dimensions) : this(PieceType.Wall, dimensions.Length, dimensions.Height, dimensions.Thickness, dimensions.IsValid) { }
@@ -28,11 +34,16 @@ namespace Aedifica.Construction
         public PieceDimensions(ShedRoofDimensions dimensions) : this(PieceType.ShedRoof, dimensions.Width, 0f, dimensions.Depth, dimensions.Rise, dimensions.Thickness, dimensions.IsValid) { }
         public PieceDimensions(GableRoofDimensions dimensions) : this(PieceType.GableRoof, dimensions.Width, 0f, dimensions.Depth, dimensions.Rise, dimensions.Thickness, dimensions.IsValid) { }
         public PieceDimensions(HipRoofDimensions dimensions) : this(PieceType.HipRoof, dimensions.Width, 0f, dimensions.Depth, dimensions.Rise, dimensions.Thickness, dimensions.IsValid) { }
+        public PieceDimensions(StairDimensions dimensions) : this(PieceType.Stair, dimensions.Width, dimensions.Height, dimensions.Run, 0f, 0f, dimensions.StepCount, dimensions.IsValid) { }
+        public PieceDimensions(RampDimensions dimensions) : this(PieceType.Ramp, dimensions.Width, dimensions.Height, dimensions.Run, 0f, dimensions.Thickness, 0, dimensions.IsValid) { }
 
         private PieceDimensions(PieceType type, float x, float y, float z, bool valid)
             : this(type, x, y, z, 0f, 0f, valid) { }
 
         private PieceDimensions(PieceType type, float x, float y, float z, float rise, float thickness, bool valid)
+            : this(type, x, y, z, rise, thickness, 0, valid) { }
+
+        private PieceDimensions(PieceType type, float x, float y, float z, float rise, float thickness, int steps, bool valid)
         {
             if (!valid) throw new ArgumentException("Piece dimensions must be valid.");
             Type = type;
@@ -40,14 +51,20 @@ namespace Aedifica.Construction
             height = y;
             Z = z;
             Rise = rise;
-            roofThickness = thickness;
+            profileThickness = thickness;
+            stepCount = steps;
         }
 
         public bool IsValid => (Type == PieceType.Block || Type == PieceType.Wall || Type == PieceType.Slab ||
-            Type == PieceType.Column || Type == PieceType.Beam || Type == PieceType.Parapet || IsRoof) &&
+            Type == PieceType.Column || Type == PieceType.Beam || Type == PieceType.Parapet ||
+            IsRoof || IsStair || IsRamp) &&
             Positive(X) && Positive(Y) && Positive(Z) && (IsSlopedRoof
-                ? Positive(Rise) && Positive(roofThickness)
-                : IsRoof ? Rise == 0f && roofThickness == Y : Rise == 0f && roofThickness == 0f);
+                ? Positive(Rise) && Positive(profileThickness)
+                : IsRoof ? Rise == 0f && profileThickness == Y
+                : IsStair ? Rise == 0f && profileThickness == 0f &&
+                    stepCount >= 1 && stepCount <= StairDimensions.MaximumStepCount
+                : IsRamp ? Rise == 0f && stepCount == 0 && Positive(height) && Positive(profileThickness)
+                : Rise == 0f && profileThickness == 0f && stepCount == 0);
         private static bool Positive(float value) => value > 0f && !float.IsNaN(value) && !float.IsInfinity(value);
 
         public BlockDimensions AsBlock() => Type == PieceType.Block ? new BlockDimensions(X, Y, Z) : throw new InvalidOperationException("Piece is not a Block.");
@@ -60,6 +77,18 @@ namespace Aedifica.Construction
         public ShedRoofDimensions AsShedRoof() => Type == PieceType.ShedRoof ? new ShedRoofDimensions(X, Z, RoofThickness, Rise) : throw new InvalidOperationException("Piece is not a ShedRoof.");
         public GableRoofDimensions AsGableRoof() => Type == PieceType.GableRoof ? new GableRoofDimensions(X, Z, RoofThickness, Rise) : throw new InvalidOperationException("Piece is not a GableRoof.");
         public HipRoofDimensions AsHipRoof() => Type == PieceType.HipRoof ? new HipRoofDimensions(X, Z, RoofThickness, Rise) : throw new InvalidOperationException("Piece is not a HipRoof.");
+        public StairDimensions AsStair() => IsStair ? new StairDimensions(X, Y, Z, StepCount) : throw new InvalidOperationException("Piece is not a Stair.");
+        public RampDimensions AsRamp() => IsRamp ? new RampDimensions(X, RampHeight, Z, RampThickness) : throw new InvalidOperationException("Piece is not a Ramp.");
+
+        public PieceDimensions WithStepCount(int steps) => IsStair
+            ? new PieceDimensions(new StairDimensions(X, Y, Z, steps))
+            : throw new InvalidOperationException("Only stairs have StepCount.");
+
+        public float MinimumForAxis(int axis)
+        {
+            if (axis < 0 || axis > 2) throw new ArgumentOutOfRangeException(nameof(axis));
+            return IsRamp && axis == 1 ? RampThickness + 0.1f : 0.1f;
+        }
 
         public PieceDimensions WithRise(float rise)
         {
@@ -94,12 +123,16 @@ namespace Aedifica.Construction
                 case PieceType.HipRoof:
                     if (axis == 1) throw new InvalidOperationException("Sloped roof height is derived from Thickness and Rise.");
                     return new PieceDimensions(new HipRoofDimensions(axis == 0 ? value : X, axis == 2 ? value : Z, RoofThickness, Rise));
+                case PieceType.Stair: return new PieceDimensions(new StairDimensions(axis == 0 ? value : X, axis == 1 ? value : Y, axis == 2 ? value : Z, StepCount));
+                case PieceType.Ramp: return new PieceDimensions(new RampDimensions(axis == 0 ? value : X,
+                    axis == 1 ? Math.Max(0.1f, value - RampThickness) : RampHeight,
+                    axis == 2 ? value : Z, RampThickness));
                 default: throw new InvalidOperationException("Unsupported piece type.");
             }
         }
 
-        public bool Equals(PieceDimensions other) => Type == other.Type && X == other.X && Y == other.Y && Z == other.Z && Rise == other.Rise && roofThickness == other.roofThickness;
+        public bool Equals(PieceDimensions other) => Type == other.Type && X == other.X && Y == other.Y && Z == other.Z && Rise == other.Rise && profileThickness == other.profileThickness && stepCount == other.stepCount;
         public override bool Equals(object obj) => obj is PieceDimensions other && Equals(other);
-        public override int GetHashCode() => (((((int)Type * 397 ^ X.GetHashCode()) * 397 ^ Y.GetHashCode()) * 397 ^ Z.GetHashCode()) * 397 ^ Rise.GetHashCode()) * 397 ^ roofThickness.GetHashCode();
+        public override int GetHashCode() => ((((((int)Type * 397 ^ X.GetHashCode()) * 397 ^ Y.GetHashCode()) * 397 ^ Z.GetHashCode()) * 397 ^ Rise.GetHashCode()) * 397 ^ profileThickness.GetHashCode()) * 397 ^ stepCount;
     }
 }

@@ -7,6 +7,46 @@ namespace Aedifica.Tests.PlayMode
 {
     public sealed class PieceViewPlayModeTests
     {
+        [TestCase(PieceType.Stair)]
+        [TestCase(PieceType.Ramp)]
+        public void CirculationViewUsesOneColliderAndRebuildsOnlyForDimensions(PieceType type)
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.That(shader, Is.Not.Null);
+            var material = new Material(shader);
+            var viewObject = new GameObject("Circulation View Test");
+            try
+            {
+                PieceId id = PieceId.Parse("40000000000000000000000000000013");
+                var pose = new PieceTransform(Vector3.zero, Quaternion.identity);
+                PieceData original = type == PieceType.Stair
+                    ? new PieceData(id, pose, new StairDimensions(2f, 2f, 3f, 10))
+                    : new PieceData(id, pose, new RampDimensions(2f, 2f, 4f, 0.2f));
+                PieceView view = viewObject.AddComponent<PieceView>();
+                view.Initialize(original, material);
+                Mesh originalMesh = viewObject.GetComponent<MeshFilter>().sharedMesh;
+                MeshCollider collider = viewObject.GetComponent<MeshCollider>();
+                Assert.That(collider, Is.Not.Null);
+                Assert.That(collider.enabled, Is.True);
+                Assert.That(collider.sharedMesh, Is.SameAs(originalMesh));
+                Assert.That(viewObject.GetComponent<BoxCollider>().enabled, Is.False);
+                Assert.That(viewObject.transform.localScale, Is.EqualTo(Vector3.one));
+                view.Refresh(original.WithMaterial(LabMaterialIds.Stone));
+                Assert.That(viewObject.GetComponent<MeshFilter>().sharedMesh, Is.SameAs(originalMesh));
+                PieceData resized = type == PieceType.Stair ? original.WithStepCount(11)
+                    : original.WithRampDimensions(new RampDimensions(2f, 2.5f, 4f, 0.2f));
+                view.Refresh(resized);
+                Assert.That(viewObject.GetComponent<MeshFilter>().sharedMesh, Is.Not.SameAs(originalMesh));
+                Assert.That(collider.sharedMesh, Is.SameAs(viewObject.GetComponent<MeshFilter>().sharedMesh));
+                Assert.That(viewObject.GetComponents<MeshCollider>().Length, Is.EqualTo(1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(viewObject);
+                Object.DestroyImmediate(material);
+            }
+        }
+
         [TestCase(PieceType.ShedRoof)]
         [TestCase(PieceType.GableRoof)]
         [TestCase(PieceType.HipRoof)]
