@@ -205,20 +205,50 @@ namespace Aedifica.Tests.EditMode
             Assert.That(motion.Distance, Is.EqualTo(25f));
         }
 
-        [TestCase(0f, 50f, 0f, -2.5f)]
-        [TestCase(0f, 0f, 50f, -2.5f)]
-        [TestCase(90f, 0f, 50f, -2.5f)]
-        public void ScreenPanPullsWorldAlongExpectedScreenAxis(float yaw, float x, float y, float expectedAxis)
+        [TestCase(0f, 15f, 50f, 0f)]
+        [TestCase(0f, 80f, 0f, 50f)]
+        [TestCase(90f, 45f, 50f, 0f)]
+        [TestCase(135f, 60f, 0f, 50f)]
+        public void ScreenPanUsesCameraRightAndUp(float yaw, float pitch, float x, float y)
         {
             var settings = new CameraSettings { smoothing = 0f };
-            var motion = new CameraMotion(Vector3.zero, yaw, 45f, 25f, settings);
+            var motion = new CameraMotion(Vector3.zero, yaw, pitch, 25f, settings);
             motion.Step(new CameraInput { PanPixels = new Vector2(x, y) }, 0.016f, settings);
-            Vector3 basis = Quaternion.Euler(0f, yaw, 0f) * (x != 0f ? Vector3.right : Vector3.forward);
-            Assert.That(Vector3.Dot(motion.Focus, basis), Is.EqualTo(expectedAxis).Within(0.0001f));
-            Assert.That(motion.Focus.y, Is.Zero);
+            Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
+            Vector3 expected = -(rotation * new Vector3(x, y, 0f)) * (settings.panSpeed * 25f);
+            Assert.That(Vector3.Distance(motion.Focus, expected), Is.LessThan(0.0001f));
+            Assert.That(Vector3.Dot(motion.Focus, rotation * Vector3.forward), Is.EqualTo(0f).Within(0.0001f));
             Assert.That(motion.Yaw, Is.EqualTo(yaw));
-            Assert.That(motion.Pitch, Is.EqualTo(45f));
+            Assert.That(motion.Pitch, Is.EqualTo(pitch));
             Assert.That(motion.Distance, Is.EqualTo(25f));
+        }
+
+        [TestCase(50f, 0f)]
+        [TestCase(-50f, 0f)]
+        [TestCase(0f, 50f)]
+        [TestCase(0f, -50f)]
+        [TestCase(50f, 50f)]
+        [TestCase(-50f, -50f)]
+        public void ScreenPanMovesWorldPointWithMouseOnBothScreenAxes(float x, float y)
+        {
+            var objectWithCamera = new GameObject("Screen pan projection test");
+            try
+            {
+                var camera = objectWithCamera.AddComponent<UnityEngine.Camera>();
+                camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
+                var settings = new CameraSettings { smoothing = 0f };
+                var motion = new CameraMotion(Vector3.zero, 35f, 45f, 25f, settings);
+                camera.transform.SetPositionAndRotation(motion.Position, motion.Rotation);
+                Vector3 before = camera.WorldToScreenPoint(Vector3.zero);
+                motion.Step(new CameraInput { PanPixels = new Vector2(x, y) }, 0.016f, settings);
+                camera.transform.SetPositionAndRotation(motion.Position, motion.Rotation);
+                Vector3 after = camera.WorldToScreenPoint(Vector3.zero);
+                if (x == 0f) Assert.That(after.x - before.x, Is.EqualTo(0f).Within(0.001f));
+                else Assert.That((after.x - before.x) * x, Is.GreaterThan(0f));
+                if (y == 0f) Assert.That(after.y - before.y, Is.EqualTo(0f).Within(0.001f));
+                else Assert.That((after.y - before.y) * y, Is.GreaterThan(0f));
+            }
+            finally { Object.DestroyImmediate(objectWithCamera); }
         }
 
         [TestCase(15f)]
@@ -240,7 +270,7 @@ namespace Aedifica.Tests.EditMode
         public void ScreenPanDependsOnPixelDeltaAndNotStartingCursorPosition()
         {
             var settings = new CameraSettings { smoothing = 0f };
-            Vector3 expected = CameraMotion.ScreenPan(new Vector2(20f, -15f), 35f, 25f, settings);
+            Vector3 expected = CameraMotion.ScreenPan(new Vector2(20f, -15f), 35f, 45f, 25f, settings);
             foreach (Vector2 start in new[] { Vector2.zero, new Vector2(400f, 300f), new Vector2(800f, 600f) })
             {
                 var motion = new CameraMotion(Vector3.zero, 35f, 45f, 25f, settings);

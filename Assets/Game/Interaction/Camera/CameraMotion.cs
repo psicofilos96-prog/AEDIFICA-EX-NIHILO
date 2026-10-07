@@ -58,12 +58,12 @@ namespace Aedifica.Interaction.Camera
         }
 
         // Opposite camera translation makes the world follow the dragged cursor.
-        // The yaw basis is the normalized XZ projection of camera right/forward.
-        public static Vector3 ScreenPan(Vector2 pixels, float yaw, float distance, CameraSettings settings)
+        // Camera right/up are orthonormal screen axes. Translating the camera
+        // opposite to the drag makes stationary geometry follow the cursor.
+        public static Vector3 ScreenPan(Vector2 pixels, float yaw, float pitch, float distance, CameraSettings settings)
         {
             float metersPerPixel = settings.panSpeed * Mathf.Clamp(distance, settings.zoomMinDistance, settings.zoomMaxDistance);
-            var rotation = Quaternion.Euler(0f, yaw, 0f);
-            return -(rotation * new Vector3(pixels.x, 0f, pixels.y)) * metersPerPixel;
+            return -(Quaternion.Euler(pitch, yaw, 0f) * new Vector3(pixels.x, pixels.y, 0f)) * metersPerPixel;
         }
 
         public void Step(CameraInput input, float deltaTime, CameraSettings settings)
@@ -84,7 +84,7 @@ namespace Aedifica.Interaction.Camera
                 targetDistance = Mathf.Clamp(targetDistance * Mathf.Exp(-input.Scroll * settings.zoomSpeed), settings.zoomMinDistance, settings.zoomMaxDistance);
                 float speed = MoveSpeed(targetDistance, settings);
                 targetFocus += HorizontalMove(input.Move, targetYaw) * speed * deltaTime;
-                targetFocus += ScreenPan(input.PanPixels, Yaw, Distance, settings);
+                targetFocus += ScreenPan(input.PanPixels, Yaw, Pitch, Distance, settings);
             }
             float blend = IsOrbiting || settings.smoothing == 0f ? 1f : 1f - Mathf.Exp(-settings.smoothing * deltaTime);
             Focus = Vector3.Lerp(Focus, targetFocus, blend);
