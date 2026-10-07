@@ -30,6 +30,28 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
+        public void WheelZoomReachesNearMinimumProgressivelyAndCanMoveAwayFromIt()
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 2f, settings);
+            float wheelStep = CameraScrollProcessor.Process(1f, out _);
+            float previous = motion.Distance;
+            for (int i = 0; i < 10; i++)
+            {
+                motion.Step(new CameraInput { Scroll = wheelStep }, 0.016f, settings);
+                Assert.That(motion.Distance, Is.InRange(settings.zoomMinDistance, previous));
+                Assert.That(float.IsNaN(motion.Distance) || float.IsInfinity(motion.Distance), Is.False);
+                previous = motion.Distance;
+            }
+            Assert.That(motion.Distance, Is.EqualTo(0.5f).Within(0.000001f));
+            motion.Step(new CameraInput { Scroll = wheelStep }, 0.016f, settings);
+            Assert.That(motion.Distance, Is.EqualTo(0.5f).Within(0.000001f));
+            motion.Step(new CameraInput { Scroll = -wheelStep }, 0.016f, settings);
+            Assert.That(motion.Distance, Is.GreaterThan(0.5f));
+            Assert.That(motion.Distance, Is.LessThan(1f));
+        }
+
+        [Test]
         public void RightDragRotatesWithoutPanning()
         {
             var input = new CameraInput();
@@ -44,8 +66,8 @@ namespace Aedifica.Tests.EditMode
             Assert.That(motion.Focus, Is.EqualTo(Vector3.zero));
         }
 
-        [TestCase(40f, 0f, 6f, 45f)]
-        [TestCase(0f, 40f, 0f, 39f)]
+        [TestCase(40f, 0f, 7.2f, 45f)]
+        [TestCase(0f, 40f, 0f, 37.8f)]
         public void RmbChangesOnlyRequestedAngle(float x, float y, float expectedYaw, float expectedPitch)
         {
             var settings = new CameraSettings { smoothing = 0f };
@@ -104,8 +126,8 @@ namespace Aedifica.Tests.EditMode
                 Assert.That(motion.Distance, Is.EqualTo(distance));
                 filter.Filter(Vector2.zero, new Vector2(400f, 300f), new Vector2(400f, 300f), true);
                 motion.Step(new CameraInput { RotatePixels = filter.Filter(new Vector2(20f, -10f), new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
-                Assert.That(motion.Yaw, Is.EqualTo(3f).Within(0.001f));
-                Assert.That(motion.Pitch, Is.EqualTo(46.5f).Within(0.001f));
+                Assert.That(motion.Yaw, Is.EqualTo(3.6f).Within(0.001f));
+                Assert.That(motion.Pitch, Is.EqualTo(46.8f).Within(0.001f));
                 Assert.That(motion.Focus, Is.EqualTo(focus));
                 Assert.That(motion.Distance, Is.EqualTo(distance));
                 motion.EndOrbit();
