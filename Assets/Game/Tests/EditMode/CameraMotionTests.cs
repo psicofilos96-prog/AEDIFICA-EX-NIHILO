@@ -44,6 +44,21 @@ namespace Aedifica.Tests.EditMode
             Assert.That(motion.Focus, Is.EqualTo(Vector3.zero));
         }
 
+        [TestCase(40f, 0f, 6f, 45f)]
+        [TestCase(0f, 40f, 0f, 39f)]
+        public void RmbChangesOnlyRequestedAngle(float x, float y, float expectedYaw, float expectedPitch)
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var focus = new Vector3(5f, 0f, -7f);
+            var motion = new CameraMotion(focus, 0f, 45f, 25f, settings);
+            motion.BeginOrbit();
+            motion.Step(new CameraInput { RotatePixels = new Vector2(x, y) }, 0.016f, settings);
+            Assert.That(motion.Yaw, Is.EqualTo(expectedYaw).Within(0.0001f));
+            Assert.That(motion.Pitch, Is.EqualTo(expectedPitch).Within(0.0001f));
+            Assert.That(motion.Focus, Is.EqualTo(focus));
+            Assert.That(motion.Distance, Is.EqualTo(25f));
+        }
+
         [Test]
         public void RotationCaptureWaitsForStableLockRegardlessOfWarpDuration()
         {
@@ -67,55 +82,34 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
-        public void RmbStartPositionDoesNotChangeCenterPivotOrOrbitResult()
+        public void RmbStartPositionDoesNotChangeRotationOrNavigationCenter()
         {
-            var cameraObject = new GameObject("RMB start test");
-            try
+            var settings = new CameraSettings();
+            var starts = new[] { new Vector2(400f, 300f), new Vector2(0f, 0f),
+                new Vector2(800f, 0f), new Vector2(0f, 600f), new Vector2(800f, 600f) };
+            foreach (Vector2 start in starts)
             {
-                var camera = cameraObject.AddComponent<UnityEngine.Camera>();
-                camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
-                var settings = new CameraSettings();
-                var starts = new[] { new Vector2(400f, 300f), new Vector2(0f, 0f),
-                    new Vector2(800f, 0f), new Vector2(0f, 600f), new Vector2(800f, 600f) };
-                Vector3? firstPivot = null;
-                Vector3? firstResult = null;
-                foreach (Vector2 start in starts)
-                {
-                    var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
-                    camera.transform.SetPositionAndRotation(motion.Position, motion.Rotation);
-                    Ray centerRay = CityBuilderCamera.ViewportCenterRay(camera);
-                    var plane = new Plane(Vector3.up, Vector3.zero);
-                    Vector3 pivot = CityBuilderCamera.SelectOrbitPivot(centerRay, motion.Position, motion.Distance,
-                        null, plane, out _);
-                    motion.BeginOrbit(pivot, settings);
-                    var filter = new RotationCaptureFilter();
-                    filter.BeginCapture();
-                    Vector2 cursorWarp = new Vector2(400f, 300f) - start;
-                    for (int i = 0; i < 4; i++)
-                        motion.Step(new CameraInput { RotatePixels = filter.Filter(cursorWarp, new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
-                    Assert.That(motion.Focus, Is.EqualTo(pivot));
-                    float yawBeforeDrag = motion.Yaw;
-                    float pitchBeforeDrag = motion.Pitch;
-                    motion.Step(new CameraInput { RotatePixels = filter.Filter(Vector2.zero, new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
-                    Assert.That(motion.Yaw, Is.EqualTo(yawBeforeDrag));
-                    Assert.That(motion.Pitch, Is.EqualTo(pitchBeforeDrag));
-                    motion.Step(new CameraInput { RotatePixels = filter.Filter(new Vector2(20f, -10f), new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
-                    if (firstPivot.HasValue)
-                    {
-                        Assert.That(Vector3.Distance(pivot, firstPivot.Value), Is.LessThan(0.0001f));
-                        Assert.That(Vector3.Distance(motion.Position, firstResult.Value), Is.LessThan(0.0001f));
-                    }
-                    else
-                    {
-                        firstPivot = pivot;
-                        firstResult = motion.Position;
-                    }
-                    Assert.That(Vector3.Distance(motion.Position, pivot), Is.EqualTo(motion.Distance).Within(0.001f));
-                }
-                Assert.That(settings.orbitYawSensitivity, Is.EqualTo(0.15f));
-                Assert.That(settings.orbitPitchSensitivity, Is.EqualTo(0.15f));
+                var motion = new CameraMotion(new Vector3(3f, 0f, -2f), 0f, 45f, 25f, settings);
+                Vector3 focus = motion.Focus;
+                float distance = motion.Distance;
+                motion.BeginOrbit();
+                var filter = new RotationCaptureFilter();
+                filter.BeginCapture();
+                Vector2 warp = new Vector2(400f, 300f) - start;
+                for (int i = 0; i < 5; i++)
+                    motion.Step(new CameraInput { RotatePixels = filter.Filter(warp, new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
+                Assert.That(motion.Yaw, Is.Zero);
+                Assert.That(motion.Pitch, Is.EqualTo(45f));
+                Assert.That(motion.Focus, Is.EqualTo(focus));
+                Assert.That(motion.Distance, Is.EqualTo(distance));
+                filter.Filter(Vector2.zero, new Vector2(400f, 300f), new Vector2(400f, 300f), true);
+                motion.Step(new CameraInput { RotatePixels = filter.Filter(new Vector2(20f, -10f), new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
+                Assert.That(motion.Yaw, Is.EqualTo(3f).Within(0.001f));
+                Assert.That(motion.Pitch, Is.EqualTo(46.5f).Within(0.001f));
+                Assert.That(motion.Focus, Is.EqualTo(focus));
+                Assert.That(motion.Distance, Is.EqualTo(distance));
+                motion.EndOrbit();
             }
-            finally { Object.DestroyImmediate(cameraObject); }
         }
 
         [Test]
@@ -198,17 +192,61 @@ namespace Aedifica.Tests.EditMode
             Assert.That(direction.x, Is.EqualTo(1f).Within(0.0001f));
         }
 
-        [TestCase(2f, 0f)]
-        [TestCase(0f, 3f)]
-        [TestCase(2f, 3f)]
-        public void WorldGrabCorrectionKeepsInitialGroundPointUnderCursor(float x, float z)
+        [Test]
+        public void WasdAndKeyboardYawPreservePitchAndDistance()
         {
-            var plane = new Plane(Vector3.up, Vector3.zero);
-            var first = new Ray(new Vector3(0f, 10f, 0f), Vector3.down);
-            var next = new Ray(new Vector3(x, 10f, z), Vector3.down);
-            Assert.That(CityBuilderCamera.TryGroundPoint(first, plane, out Vector3 grabbed), Is.True);
-            Assert.That(CityBuilderCamera.TryGroundPoint(next, plane, out Vector3 current), Is.True);
-            Assert.That(CameraMotion.GrabCorrection(grabbed, current), Is.EqualTo(new Vector3(-x, 0f, -z)));
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+            motion.Step(new CameraInput { Move = Vector2.up, KeyboardYaw = 1f }, 1f, settings);
+            Assert.That(motion.Yaw, Is.EqualTo(settings.keyboardYawSpeed));
+            Assert.That(motion.Focus.y, Is.Zero);
+            Assert.That(motion.Focus.x, Is.GreaterThan(0f));
+            Assert.That(motion.Pitch, Is.EqualTo(45f));
+            Assert.That(motion.Distance, Is.EqualTo(25f));
+        }
+
+        [TestCase(0f, 50f, 0f, -2.5f)]
+        [TestCase(0f, 0f, 50f, -2.5f)]
+        [TestCase(90f, 0f, 50f, -2.5f)]
+        public void ScreenPanPullsWorldAlongExpectedScreenAxis(float yaw, float x, float y, float expectedAxis)
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, yaw, 45f, 25f, settings);
+            motion.Step(new CameraInput { PanPixels = new Vector2(x, y) }, 0.016f, settings);
+            Vector3 basis = Quaternion.Euler(0f, yaw, 0f) * (x != 0f ? Vector3.right : Vector3.forward);
+            Assert.That(Vector3.Dot(motion.Focus, basis), Is.EqualTo(expectedAxis).Within(0.0001f));
+            Assert.That(motion.Focus.y, Is.Zero);
+            Assert.That(motion.Yaw, Is.EqualTo(yaw));
+            Assert.That(motion.Pitch, Is.EqualTo(45f));
+            Assert.That(motion.Distance, Is.EqualTo(25f));
+        }
+
+        [TestCase(15f)]
+        [TestCase(80f)]
+        public void ScreenPanIsFiniteAtPitchLimitsAndBoundedByZoomDistance(float pitch)
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var near = new CameraMotion(Vector3.zero, 35f, pitch, settings.zoomMinDistance, settings);
+            var far = new CameraMotion(Vector3.zero, 35f, pitch, settings.zoomMaxDistance, settings);
+            var input = new CameraInput { PanPixels = new Vector2(100f, 100f) };
+            near.Step(input, 0.016f, settings);
+            far.Step(input, 0.016f, settings);
+            Assert.That(near.Focus.magnitude, Is.EqualTo(Mathf.Sqrt(2f) * 100f * settings.panSpeed * settings.zoomMinDistance).Within(0.0001f));
+            Assert.That(far.Focus.magnitude, Is.EqualTo(Mathf.Sqrt(2f) * 100f * settings.panSpeed * settings.zoomMaxDistance).Within(0.0001f));
+            Assert.That(float.IsNaN(far.Focus.x) || float.IsInfinity(far.Focus.x), Is.False);
+        }
+
+        [Test]
+        public void ScreenPanDependsOnPixelDeltaAndNotStartingCursorPosition()
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            Vector3 expected = CameraMotion.ScreenPan(new Vector2(20f, -15f), 35f, 25f, settings);
+            foreach (Vector2 start in new[] { Vector2.zero, new Vector2(400f, 300f), new Vector2(800f, 600f) })
+            {
+                var motion = new CameraMotion(Vector3.zero, 35f, 45f, 25f, settings);
+                motion.Step(new CameraInput { PanPixels = (start + new Vector2(20f, -15f)) - start }, 0.016f, settings);
+                Assert.That(Vector3.Distance(motion.Focus, expected), Is.LessThan(0.0001f));
+            }
         }
 
         [TestCase(0f, 45f)]
@@ -227,61 +265,37 @@ namespace Aedifica.Tests.EditMode
             Assert.That(motion.Rotation.eulerAngles.z, Is.EqualTo(0f).Within(0.001f));
         }
 
-        [Test]
-        public void CenterViewportRayProjectsThroughViewportCenter()
-        {
-            var cameraObject = new GameObject("Orbit ray test");
-            try
-            {
-                var camera = cameraObject.AddComponent<UnityEngine.Camera>();
-                cameraObject.transform.SetPositionAndRotation(new Vector3(2f, 10f, -5f), Quaternion.Euler(45f, 30f, 0f));
-                Ray ray = CityBuilderCamera.ViewportCenterRay(camera);
-                string geometry = $"position={camera.transform.position}, rotation={camera.transform.rotation}, forward={camera.transform.forward}, pixelRect={camera.pixelRect}, aspect={camera.aspect}, viewport=(0.5,0.5), rayOrigin={ray.origin}, rayDirection={ray.direction}";
-                // 1e-4 viewport units is below one tenth of a pixel at this test's 377 px height.
-                foreach (float distance in new[] { 10f, 100f })
-                {
-                    Vector3 projected = camera.WorldToViewportPoint(ray.GetPoint(distance));
-                    Assert.That(projected.z, Is.GreaterThan(0f), geometry);
-                    Assert.That(projected.x, Is.EqualTo(0.5f).Within(0.0001f), geometry);
-                    Assert.That(projected.y, Is.EqualTo(0.5f).Within(0.0001f), geometry);
-                }
-            }
-            finally { Object.DestroyImmediate(cameraObject); }
-        }
-
         [TestCase(80f, 0f)]
         [TestCase(0f, -60f)]
         [TestCase(80f, -60f)]
-        public void RmbOrbitKeepsPivotAndDistanceAndDoesNotJumpOnRelease(float horizontal, float vertical)
+        public void RmbRotationPreservesFocusAndDistanceAcrossGestures(float horizontal, float vertical)
         {
             var settings = new CameraSettings();
-            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
-            Vector3 before = motion.Position;
-            Vector3 pivot = before + motion.Rotation * Vector3.forward * 20f;
-            motion.BeginOrbit(pivot, settings);
-            float distance = Vector3.Distance(before, pivot);
-            Assert.That(Vector3.Distance(motion.Position, before), Is.LessThan(0.001f));
-            for (int i = 0; i < 4; i++)
-                motion.Step(new CameraInput { RotatePixels = new Vector2(horizontal / 4f, vertical / 4f) }, 0.016f, settings);
-            Assert.That(motion.OrbitPivot, Is.EqualTo(pivot));
-            Assert.That(motion.Focus, Is.EqualTo(pivot));
-            Assert.That(Vector3.Distance(motion.Position, pivot), Is.EqualTo(distance).Within(0.001f));
-            Assert.That(motion.Rotation.eulerAngles.z, Is.EqualTo(0f).Within(0.001f));
-            Vector3 releasePosition = motion.Position;
-            motion.EndOrbit();
-            motion.Step(default, 0.016f, settings);
-            Assert.That(Vector3.Distance(motion.Position, releasePosition), Is.LessThan(0.001f));
-            Assert.That(motion.Pitch, Is.InRange(settings.pitchMin, settings.pitchMax));
+            var motion = new CameraMotion(new Vector3(3f, 0f, -2f), 0f, 45f, 25f, settings);
+            Vector3 focus = motion.Focus;
+            float distance = motion.Distance;
+            for (int gesture = 0; gesture < 3; gesture++)
+            {
+                motion.BeginOrbit();
+                Assert.That(motion.Focus, Is.EqualTo(focus));
+                Assert.That(motion.Distance, Is.EqualTo(distance));
+                for (int i = 0; i < 4; i++)
+                    motion.Step(new CameraInput { RotatePixels = new Vector2(horizontal / 4f, vertical / 4f) }, 0.016f, settings);
+                motion.EndOrbit();
+                Assert.That(motion.Focus, Is.EqualTo(focus));
+                Assert.That(motion.Distance, Is.EqualTo(distance));
+                Assert.That(Vector3.Distance(motion.Position, focus), Is.EqualTo(distance).Within(0.001f));
+            }
         }
 
         [Test]
-        public void OrbitResultDependsOnAccumulatedDragNotFrameDuration()
+        public void RmbRotationDependsOnAccumulatedDragNotFrameDuration()
         {
             var settings = new CameraSettings();
             var one = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
             var many = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
-            one.BeginOrbit(Vector3.zero, settings);
-            many.BeginOrbit(Vector3.zero, settings);
+            one.BeginOrbit();
+            many.BeginOrbit();
             one.Step(new CameraInput { RotatePixels = new Vector2(50f, -20f) }, 0.1f, settings);
             for (int i = 0; i < 10; i++)
                 many.Step(new CameraInput { RotatePixels = new Vector2(5f, -2f) }, 0.01f, settings);
@@ -289,49 +303,19 @@ namespace Aedifica.Tests.EditMode
             Assert.That(one.Focus, Is.EqualTo(many.Focus));
         }
 
-        [Test]
-        public void OrbitPivotAcceptsNearbySurfaceAndRejectsDistantSurface()
-        {
-            var origin = new Vector3(0f, 10f, 0f);
-            var ray = new Ray(origin, Vector3.down);
-            var plane = new Plane(Vector3.up, Vector3.zero);
-            Vector3 near = CityBuilderCamera.SelectOrbitPivot(ray, origin, 10f, new Vector3(0f, 0f, 0f), plane, out var nearSource);
-            Assert.That(nearSource, Is.EqualTo(CityBuilderCamera.OrbitPivotSource.Surface));
-            Assert.That(near, Is.EqualTo(Vector3.zero));
-            Vector3 distant = CityBuilderCamera.SelectOrbitPivot(ray, origin, 10f, new Vector3(0f, -1000f, 0f), plane, out var distantSource);
-            Assert.That(distantSource, Is.EqualTo(CityBuilderCamera.OrbitPivotSource.NavigationPlane));
-            Assert.That(Vector3.Distance(origin, distant), Is.EqualTo(10f).Within(0.001f));
-        }
-
-        [Test]
-        public void OrbitPivotBoundsNearParallelAndExtremePlaneIntersections()
-        {
-            var origin = new Vector3(0f, 10f, 0f);
-            var plane = new Plane(Vector3.up, Vector3.zero);
-            var shallow = new Ray(origin, new Vector3(1f, -0.001f, 0f).normalized);
-            Vector3 pivot = CityBuilderCamera.SelectOrbitPivot(shallow, origin, 25f, null, plane, out var source);
-            Assert.That(source, Is.EqualTo(CityBuilderCamera.OrbitPivotSource.BoundedRay));
-            Assert.That(Vector3.Distance(origin, pivot), Is.EqualTo(25f).Within(0.001f));
-            var far = new Ray(origin, new Vector3(1f, -0.2f, 0f).normalized);
-            Vector3 farPivot = CityBuilderCamera.SelectOrbitPivot(far, origin, 25f, null, plane, out source);
-            Assert.That(source, Is.EqualTo(CityBuilderCamera.OrbitPivotSource.BoundedRay));
-            Assert.That(Vector3.Distance(origin, farPivot), Is.EqualTo(25f).Within(0.001f));
-            Assert.That(float.IsNaN(farPivot.x) || float.IsInfinity(farPivot.x), Is.False);
-        }
-
         [TestCase(15f)]
         [TestCase(80f)]
-        public void SmallOrbitDragHasBoundedAngularAndSpatialResponseAtPitchLimits(float pitch)
+        public void SmallRmbDragHasBoundedAngularAndSpatialResponseAtPitchLimits(float pitch)
         {
             var settings = new CameraSettings();
             var motion = new CameraMotion(Vector3.zero, 0f, pitch, 25f, settings);
-            motion.BeginOrbit(Vector3.zero, settings);
+            motion.BeginOrbit();
             Vector3 before = motion.Position;
             motion.Step(new CameraInput { RotatePixels = new Vector2(2f, -2f) }, 0.016f, settings);
             Assert.That(Mathf.Abs(motion.Yaw), Is.LessThanOrEqualTo(0.4f + 0.001f));
             Assert.That(Mathf.Abs(motion.Pitch - pitch), Is.LessThanOrEqualTo(0.4f + 0.001f));
             Assert.That(Vector3.Distance(before, motion.Position), Is.LessThan(0.25f));
-            Assert.That(Vector3.Distance(motion.Position, motion.OrbitPivot), Is.EqualTo(25f).Within(0.001f));
+            Assert.That(Vector3.Distance(motion.Position, motion.Focus), Is.EqualTo(25f).Within(0.001f));
         }
 
         [Test]

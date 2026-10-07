@@ -9,31 +9,18 @@ namespace Aedifica.Interaction.Camera
         public float Pitch { get; private set; }
         public float Distance { get; private set; }
         public bool IsOrbiting { get; private set; }
-        public Vector3 OrbitPivot { get; private set; }
 
         private Vector3 targetFocus;
         private float targetYaw;
         private float targetPitch;
         private float targetDistance;
 
-        public void ShiftFocus(Vector3 worldDelta)
+        public void BeginOrbit()
         {
-            if (float.IsNaN(worldDelta.x) || float.IsNaN(worldDelta.y) || float.IsNaN(worldDelta.z) ||
-                float.IsInfinity(worldDelta.x) || float.IsInfinity(worldDelta.y) || float.IsInfinity(worldDelta.z)) return;
-            targetFocus = Focus + worldDelta;
-        }
-
-        public void BeginOrbit(Vector3 pivot, CameraSettings settings)
-        {
-            Vector3 offset = pivot - Position;
-            float distance = offset.magnitude;
-            if (distance < 0.001f) return;
-            Vector3 forward = offset / distance;
-            OrbitPivot = Focus = targetFocus = pivot;
-            Distance = targetDistance = distance;
-            Yaw = targetYaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
-            Pitch = targetPitch = Mathf.Clamp(-Mathf.Asin(forward.y) * Mathf.Rad2Deg,
-                settings.pitchMin, settings.pitchMax);
+            targetFocus = Focus;
+            targetDistance = Distance;
+            targetYaw = Yaw;
+            targetPitch = Pitch;
             IsOrbiting = true;
         }
 
@@ -45,8 +32,6 @@ namespace Aedifica.Interaction.Camera
             targetYaw = Yaw;
             targetPitch = Pitch;
         }
-
-        public static Vector3 GrabCorrection(Vector3 grabbedPoint, Vector3 currentPoint) => grabbedPoint - currentPoint;
 
         public CameraMotion(Vector3 focus, float yaw, float pitch, float distance, CameraSettings settings)
         {
@@ -72,6 +57,15 @@ namespace Aedifica.Interaction.Camera
             return rotation * new Vector3(input.x, 0f, input.y).normalized;
         }
 
+        // Opposite camera translation makes the world follow the dragged cursor.
+        // The yaw basis is the normalized XZ projection of camera right/forward.
+        public static Vector3 ScreenPan(Vector2 pixels, float yaw, float distance, CameraSettings settings)
+        {
+            float metersPerPixel = settings.panSpeed * Mathf.Clamp(distance, settings.zoomMinDistance, settings.zoomMaxDistance);
+            var rotation = Quaternion.Euler(0f, yaw, 0f);
+            return -(rotation * new Vector3(pixels.x, 0f, pixels.y)) * metersPerPixel;
+        }
+
         public void Step(CameraInput input, float deltaTime, CameraSettings settings)
         {
             settings.Normalize();
@@ -90,6 +84,7 @@ namespace Aedifica.Interaction.Camera
                 targetDistance = Mathf.Clamp(targetDistance * Mathf.Exp(-input.Scroll * settings.zoomSpeed), settings.zoomMinDistance, settings.zoomMaxDistance);
                 float speed = MoveSpeed(targetDistance, settings);
                 targetFocus += HorizontalMove(input.Move, targetYaw) * speed * deltaTime;
+                targetFocus += ScreenPan(input.PanPixels, Yaw, Distance, settings);
             }
             float blend = IsOrbiting || settings.smoothing == 0f ? 1f : 1f - Mathf.Exp(-settings.smoothing * deltaTime);
             Focus = Vector3.Lerp(Focus, targetFocus, blend);

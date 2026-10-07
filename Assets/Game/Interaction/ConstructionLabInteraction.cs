@@ -39,7 +39,7 @@ namespace Aedifica.Interaction
         private ManipulationSession session;
         private PieceId? pressedPieceId;
         private Vector2 pressPosition;
-        private bool draggingWorld;
+        private bool draggingPan;
         private bool lastObservedLeftPressed;
 
         private void Awake()
@@ -79,10 +79,10 @@ namespace Aedifica.Interaction
             Mouse mouse = Mouse.current;
             if (mouse == null) return;
             bool cursorUnavailableForPan = mouse.rightButton.isPressed || Cursor.lockState == CursorLockMode.Locked;
-            if (cursorUnavailableForPan && draggingWorld)
+            if (cursorUnavailableForPan && draggingPan)
             {
-                cityCamera.EndWorldGrab();
-                draggingWorld = false;
+                cityCamera.EndPan();
+                draggingPan = false;
             }
             Vector2 pointer = mouse.position.ReadValue();
             if (debugSelection && mouse.leftButton.isPressed != lastObservedLeftPressed)
@@ -96,11 +96,10 @@ namespace Aedifica.Interaction
             if (session != null && (mouse.leftButton.isPressed || mouse.leftButton.wasReleasedThisFrame)) UpdateManipulation(pointer);
             else if (mouse.leftButton.isPressed && !cursorUnavailableForPan && !IsClick(pressPosition, pointer))
             {
-                if (!draggingWorld)
+                if (!draggingPan)
                 {
-                    draggingWorld = cityCamera.BeginWorldGrab(pressPosition);
+                    draggingPan = cityCamera.BeginPan();
                 }
-                if (draggingWorld) cityCamera.DragWorld(pointer);
             }
             if (mouse.leftButton.wasReleasedThisFrame) PointerUp(pointer);
 
@@ -111,7 +110,7 @@ namespace Aedifica.Interaction
         public void PointerDown(Vector2 pointer)
         {
             pressPosition = pointer;
-            draggingWorld = false;
+            draggingPan = false;
             pressedPieceId = null;
             PickResult picked = Pick(pointer);
             GizmoHandle nearestHandle = picked.Handle;
@@ -225,8 +224,8 @@ namespace Aedifica.Interaction
 
         public void PointerUp(Vector2 pointer)
         {
-            cityCamera.EndWorldGrab();
-            draggingWorld = false;
+            cityCamera.EndPan();
+            draggingPan = false;
             if (session != null)
             {
                 EndManipulation();
@@ -263,7 +262,7 @@ namespace Aedifica.Interaction
             session = null;
             if (cityCamera != null)
             {
-                cityCamera.EndWorldGrab();
+                cityCamera.EndPan();
                 cityCamera.SetPanSuppressed(false);
             }
         }
