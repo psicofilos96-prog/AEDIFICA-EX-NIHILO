@@ -272,10 +272,17 @@ namespace Aedifica.Tests.EditMode
             PieceData target;
             switch (targetType)
             {
-                case PieceType.Wall: target = new PieceData(B, pose, new WallDimensions(1f, 0.2f, 1f)); break;
-                case PieceType.Slab: target = new PieceData(B, pose, new SlabDimensions(1f, 0.2f, 1f)); break;
+                // Shed/Gable end fascia is centered at y=0.6 m. A 0.2 m target
+                // ends at y=0.2 m, outside the 0.25 m Surface capture radius.
+                case PieceType.Wall: target = new PieceData(B, pose, new WallDimensions(1f, 1f, 1f)); break;
+                case PieceType.Slab: target = new PieceData(B, pose, new SlabDimensions(1f, 1f, 1f)); break;
                 case PieceType.Column: target = new PieceData(B, pose, new ColumnDimensions(1f, 0.2f, 1f)); break;
-                default: target = Roof(targetType, 1f, 1f, id: B, position: pose.Position); break;
+                // Raise the Hip's underside so its west fascia spans y=0.4..0.8 m.
+                // Its lower eave stays within 0.25 m of the Gable's upper eave.
+                case PieceType.HipRoof: target = new PieceData(B,
+                    new PieceTransform(new Vector3(1.1f, 0.4f, 0f), Quaternion.identity),
+                    new HipRoofDimensions(1f, 1f, 0.4f, 1f)); break;
+                default: throw new ArgumentOutOfRangeException(nameof(targetType));
             }
             foreach (GeometricSnapKind kind in new[] { GeometricSnapKind.Endpoint, GeometricSnapKind.Edge, GeometricSnapKind.Surface })
             {
@@ -286,6 +293,31 @@ namespace Aedifica.Tests.EditMode
                 var session = new ManipulationSession(moving, ManipulationMode.Move, ManipulationAxis.X,
                     Vector2.zero, Vector2.right, 100f, settings);
                 var resolver = new SnapResolver();
+                if (kind == GeometricSnapKind.Surface)
+                {
+                    var sourceFeatures = new List<SnapFeature>();
+                    var targetFeatures = new List<SnapFeature>();
+                    SnapGeometry.Collect(moving, sourceFeatures);
+                    SnapGeometry.Collect(target, targetFeatures);
+                    bool facingFasciaWithinCapture = false;
+                    foreach (SnapFeature source in sourceFeatures)
+                    foreach (SnapFeature surface in targetFeatures)
+                    {
+                        if (source.Kind != GeometricSnapKind.Surface || source.Triangle ||
+                            surface.Kind != GeometricSnapKind.Surface || surface.Triangle ||
+                            Vector3.Dot(source.Normal, Vector3.right) < 0.999f ||
+                            Vector3.Dot(surface.Normal, Vector3.left) < 0.999f) continue;
+                        Vector3 offset = source.A - surface.A;
+                        Vector3 nearest = surface.A + surface.U * Mathf.Clamp(
+                            Vector3.Dot(offset, surface.U) / surface.U.sqrMagnitude, -1f, 1f)
+                            + surface.V * Mathf.Clamp(
+                                Vector3.Dot(offset, surface.V) / surface.V.sqrMagnitude, -1f, 1f);
+                        if (Vector3.Distance(source.A, nearest) <= settings.CaptureDistance)
+                            facingFasciaWithinCapture = true;
+                    }
+                    Assert.That(facingFasciaWithinCapture, Is.True,
+                        $"Fixture must expose opposing surfaces within capture: roof={roofType}, target={targetType}");
+                }
                 Assert.That(resolver.Resolve(moving, session, settings, new[] { moving }).Transform.Position,
                     Is.EqualTo(moving.Transform.Position));
                 Assert.That(resolver.HasTarget, Is.False);
