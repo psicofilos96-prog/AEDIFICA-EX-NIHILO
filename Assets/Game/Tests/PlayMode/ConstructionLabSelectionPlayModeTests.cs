@@ -5,6 +5,8 @@ using Aedifica.Interaction.Camera;
 using Aedifica.Rendering;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.TestTools;
 
 namespace Aedifica.Tests.PlayMode
@@ -49,6 +51,14 @@ namespace Aedifica.Tests.PlayMode
                 yield return null; // The interaction displays the selected piece's gizmo in Update.
                 GameObject interactionGizmo = GameObject.Find("Construction Gizmo");
                 Assert.That(interactionGizmo, Is.Not.Null);
+                int negativeResizeHandles = 0;
+                foreach (GizmoHandle handle in interactionGizmo.GetComponentsInChildren<GizmoHandle>(true))
+                    if (handle.Mode == ManipulationMode.Resize && handle.FaceSign == -1)
+                    {
+                        negativeResizeHandles++;
+                        Assert.That(handle.transform.parent, Is.EqualTo(interactionGizmo.transform));
+                    }
+                Assert.That(negativeResizeHandles, Is.EqualTo(3), "ConstructionLabInteraction must create all negative face handles.");
                 GizmoHandle moveHandle = null;
                 foreach (GizmoHandle handle in interactionGizmo.GetComponentsInChildren<GizmoHandle>())
                     if (handle.Mode == ManipulationMode.Move && handle.Axis == ManipulationAxis.X) moveHandle = handle;
@@ -61,6 +71,52 @@ namespace Aedifica.Tests.PlayMode
                 Assert.That(sessionField.GetValue(interaction), Is.Not.Null);
                 Assert.That(panField.GetValue(interaction), Is.False);
                 interaction.PointerUp(handlePointer);
+                Keyboard testKeyboard = InputSystem.AddDevice<Keyboard>();
+                Mouse testMouse = InputSystem.AddDevice<Mouse>();
+                try
+                {
+                    testKeyboard.MakeCurrent();
+                    testMouse.MakeCurrent();
+                    var update = typeof(ConstructionLabInteraction).GetMethod("Update",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    Assert.That(update, Is.Not.Null);
+                    void Press(Key key)
+                    {
+                        InputSystem.QueueStateEvent(testKeyboard, new KeyboardState(key));
+                        InputSystem.Update();
+                        update.Invoke(interaction, null);
+                        InputSystem.QueueStateEvent(testKeyboard, new KeyboardState());
+                        InputSystem.Update();
+                    }
+                    Press(Key.Digit3);
+                    Press(Key.F);
+                    Assert.That(interaction.Mode, Is.EqualTo(ManipulationMode.Resize));
+                    int visibleFaceHandles = 0;
+                    foreach (GizmoHandle handle in interactionGizmo.GetComponentsInChildren<GizmoHandle>())
+                        if (handle.Mode == ManipulationMode.Resize) visibleFaceHandles++;
+                    Assert.That(visibleFaceHandles, Is.EqualTo(6), "F must expose all six face handles after 3 selects Resize.");
+                    Press(Key.T);
+                    Press(Key.H);
+                    Press(Key.P);
+                    Press(Key.R);
+                    Press(Key.G);
+                    Assert.That(interaction.Snapping.SurfaceSnapEnabled, Is.True);
+                    Assert.That(interaction.Snapping.EdgeSnapEnabled, Is.True);
+                    Assert.That(interaction.Snapping.EndpointSnapEnabled, Is.True);
+                    Assert.That(interaction.Snapping.RotationSnapEnabled, Is.True);
+                    Assert.That(interaction.Snapping.PositionSnapEnabled, Is.True);
+                    Press(Key.R);
+                    Press(Key.F);
+                    Assert.That(interaction.Snapping.RotationSnapEnabled, Is.False,
+                        "R must toggle independently after T/H/P.");
+                    Assert.That(interactionGizmo.GetComponentsInChildren<GizmoHandle>(),
+                        Has.Length.EqualTo(3), "F must restore bilateral resize after T/H/P.");
+                }
+                finally
+                {
+                    InputSystem.RemoveDevice(testMouse);
+                    InputSystem.RemoveDevice(testKeyboard);
+                }
                 var faceSession = new ManipulationSession(piece, ManipulationMode.Resize, ManipulationAxis.X,
                     Vector2.zero, Vector2.right, 100f, null, ResizeMode.Face, -1);
                 PieceData resizedPiece = faceSession.Evaluate(new Vector2(100f, 0f));
