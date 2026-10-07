@@ -13,6 +13,10 @@ namespace Aedifica.Interaction
             ? (Axis == ManipulationAxis.X ? "Length" : Axis == ManipulationAxis.Y ? "Height" : "Thickness")
             : TargetPieceType == PieceType.Slab
                 ? (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Thickness" : "Depth")
+            : TargetPieceType == PieceType.Beam
+                ? (Axis == ManipulationAxis.X ? "Length" : Axis == ManipulationAxis.Y ? "Height" : "Width")
+            : TargetPieceType == PieceType.Parapet
+                ? (Axis == ManipulationAxis.X ? "Length" : Axis == ManipulationAxis.Y ? "Height" : "Thickness")
                 : (Axis == ManipulationAxis.X ? "Width" : Axis == ManipulationAxis.Y ? "Height" : "Depth");
 
         public void Configure(ManipulationMode mode, ManipulationAxis axis, int faceSign = 1)

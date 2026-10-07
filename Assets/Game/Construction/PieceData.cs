@@ -12,12 +12,21 @@ namespace Aedifica.Construction
         public BlockDimensions BlockDimensions => Dimensions.AsBlock();
         public WallDimensions WallDimensions => Dimensions.AsWall();
         public SlabDimensions SlabDimensions => Dimensions.AsSlab();
+        public ColumnDimensions ColumnDimensions => Dimensions.AsColumn();
+        public BeamDimensions BeamDimensions => Dimensions.AsBeam();
+        public ParapetDimensions ParapetDimensions => Dimensions.AsParapet();
 
         public PieceData(PieceId id, PieceTransform transform, BlockDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
         public PieceData(PieceId id, PieceTransform transform, WallDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
         public PieceData(PieceId id, PieceTransform transform, SlabDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, ColumnDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, BeamDimensions dimensions)
+            : this(id, transform, new PieceDimensions(dimensions)) { }
+        public PieceData(PieceId id, PieceTransform transform, ParapetDimensions dimensions)
             : this(id, transform, new PieceDimensions(dimensions)) { }
 
         // Keep the P0.2 constructor while rejecting a mismatched semantic type.
@@ -55,5 +64,8 @@ namespace Aedifica.Construction
         public PieceData WithBlockDimensions(BlockDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithWallDimensions(WallDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
         public PieceData WithSlabDimensions(SlabDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithColumnDimensions(ColumnDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithBeamDimensions(BeamDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
+        public PieceData WithParapetDimensions(ParapetDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));
     }
 }

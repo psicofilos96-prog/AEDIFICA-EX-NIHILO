@@ -42,6 +42,19 @@ namespace Aedifica.Tests.PlayMode
                 Assert.That(w.GetComponent<MeshRenderer>().sharedMaterial, Is.SameAs(stone));
                 Assert.That(w2.GetComponent<MeshRenderer>().sharedMaterial, Is.SameAs(brick));
                 Assert.That(s.GetComponent<MeshRenderer>().sharedMaterial, Is.SameAs(plaster));
+                foreach (PieceId newId in new[] {
+                    PieceId.Parse("10000000000000000000000000000001"),
+                    PieceId.Parse("10000000000000000000000000000003"),
+                    PieceId.Parse("10000000000000000000000000000004") })
+                {
+                    Assert.That(lab.TryGetView(newId, out PieceView newView), Is.True);
+                    Mesh originalMesh = newView.GetComponent<MeshFilter>().sharedMesh;
+                    newView.SetSelected(true);
+                    Assert.That(lab.CycleMaterial(newId), Is.True);
+                    Assert.That(newView.GetComponent<MeshFilter>().sharedMesh, Is.SameAs(originalMesh));
+                    Assert.That(newView.transform.localScale, Is.EqualTo(Vector3.one));
+                    newView.SetSelected(false);
+                }
 
                 Mesh mesh = w.GetComponent<MeshFilter>().sharedMesh;
                 w.SetSelected(true);

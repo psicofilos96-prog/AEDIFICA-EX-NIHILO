@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using Aedifica.Construction;
+using Aedifica.Geometry;
+using Aedifica.Interaction;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -85,6 +87,76 @@ namespace Aedifica.Tests.EditMode
             Assert.Throws<ArgumentException>(() => new PieceData(default, transform, dimensions));
             Assert.Throws<ArgumentException>(() => new PieceData(IdA, default, dimensions));
             Assert.Throws<ArgumentException>(() => new PieceData(IdA, transform, default(BlockDimensions)));
+        }
+
+        [TestCase(PieceType.Column, "Width", "Height", "Depth")]
+        [TestCase(PieceType.Beam, "Length", "Height", "Width")]
+        [TestCase(PieceType.Parapet, "Length", "Height", "Thickness")]
+        public void ArchitecturalFamiliesRetainSemanticDimensionsAndSupportExistingTools(
+            PieceType type, string xName, string yName, string zName)
+        {
+            var transform = new PieceTransform(new Vector3(2f, 3f, 4f), Quaternion.identity);
+            PieceData piece;
+            switch (type)
+            {
+                case PieceType.Column: piece = new PieceData(IdA, transform, new ColumnDimensions(2f, 1f, 3f)); break;
+                case PieceType.Beam: piece = new PieceData(IdA, transform, new BeamDimensions(2f, 1f, 3f)); break;
+                case PieceType.Parapet: piece = new PieceData(IdA, transform, new ParapetDimensions(2f, 1f, 3f)); break;
+                default: throw new ArgumentOutOfRangeException(nameof(type));
+            }
+            Assert.That(piece.Type, Is.EqualTo(type));
+            Assert.That((piece.Dimensions.X, piece.Dimensions.Y, piece.Dimensions.Z), Is.EqualTo((2f, 1f, 3f)));
+            Assert.That(piece.Dimensions.IsValid, Is.True);
+            var geometry = BlockGeometryGenerator.GeneratePiece(piece.Dimensions);
+            Assert.That(geometry.Bounds.center, Is.EqualTo(new Vector3(0f, 0.5f, 0f)));
+            Assert.That(geometry.Bounds.size, Is.EqualTo(new Vector3(2f, 1f, 3f)));
+            Assert.That(piece.WithMaterial(LabMaterialIds.Stone).Dimensions, Is.EqualTo(piece.Dimensions));
+            Assert.Throws<ArgumentException>(() => piece.WithDimensions(new PieceDimensions(new BlockDimensions(2f, 1f, 3f))));
+            var handle = new GameObject("Dimension label test").AddComponent<GizmoHandle>();
+            try
+            {
+                foreach (ManipulationAxis axis in new[] { ManipulationAxis.X, ManipulationAxis.Y, ManipulationAxis.Z })
+                {
+                    handle.Configure(ManipulationMode.Resize, axis);
+                    handle.SetPieceType(type);
+                    Assert.That(handle.SemanticDimension, Is.EqualTo(axis == ManipulationAxis.X ? xName
+                        : axis == ManipulationAxis.Y ? yName : zName));
+                }
+            }
+            finally { UnityEngine.Object.DestroyImmediate(handle.gameObject); }
+            var move = new ManipulationSession(piece, ManipulationMode.Move, ManipulationAxis.X,
+                Vector2.zero, Vector2.right, 100f).Evaluate(new Vector2(100f, 0f));
+            Assert.That(move.Transform.Position, Is.EqualTo(new Vector3(3f, 3f, 4f)));
+            Assert.That(move.Dimensions, Is.EqualTo(piece.Dimensions));
+            var rotate = new ManipulationSession(piece, ManipulationMode.Rotate, ManipulationAxis.Y,
+                Vector2.zero, Vector2.right, 1f).Evaluate(new Vector2(90f, 0f));
+            Assert.That(Quaternion.Angle(rotate.Transform.Rotation, Quaternion.Euler(0f, 45f, 0f)), Is.LessThan(0.001f));
+            Assert.That(rotate.Dimensions, Is.EqualTo(piece.Dimensions));
+            foreach (ManipulationAxis axis in new[] { ManipulationAxis.X, ManipulationAxis.Y, ManipulationAxis.Z })
+            {
+                var resized = new ManipulationSession(piece, ManipulationMode.Resize, axis,
+                    Vector2.zero, Vector2.right, 100f).Evaluate(new Vector2(100f, 0f));
+                Assert.That(resized.Dimensions.X, Is.EqualTo(axis == ManipulationAxis.X ? 3f : 2f));
+                Assert.That(resized.Dimensions.Y, Is.EqualTo(axis == ManipulationAxis.Y ? 2f : 1f));
+                Assert.That(resized.Dimensions.Z, Is.EqualTo(axis == ManipulationAxis.Z ? 4f : 3f));
+            }
+        }
+
+        [Test]
+        public void ArchitecturalDimensionsRejectInvalidValues()
+        {
+            foreach (float invalid in new[] { 0f, -1f, float.NaN, float.PositiveInfinity })
+            {
+                Assert.Throws<ArgumentOutOfRangeException>(() => new ColumnDimensions(invalid, 1f, 1f));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new ColumnDimensions(1f, invalid, 1f));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new ColumnDimensions(1f, 1f, invalid));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new BeamDimensions(invalid, 1f, 1f));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new BeamDimensions(1f, invalid, 1f));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new BeamDimensions(1f, 1f, invalid));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new ParapetDimensions(invalid, 1f, 1f));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new ParapetDimensions(1f, invalid, 1f));
+                Assert.Throws<ArgumentOutOfRangeException>(() => new ParapetDimensions(1f, 1f, invalid));
+            }
         }
 
         [Test]

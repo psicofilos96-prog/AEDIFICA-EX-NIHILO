@@ -31,13 +31,16 @@ namespace Aedifica.Tests.PlayMode
                 labObject.SetActive(true);
                 yield return null;
 
-                Assert.That(lab.World.Count, Is.GreaterThanOrEqualTo(4));
-                bool block = false, wall = false, slab = false;
+                Assert.That(lab.World.Count, Is.GreaterThanOrEqualTo(10));
+                bool block = false, wall = false, slab = false, column = false, beam = false, parapet = false;
                 foreach (PieceData piece in lab.World.Pieces)
                 {
                     block |= piece.Type == PieceType.Block;
                     wall |= piece.Type == PieceType.Wall;
                     slab |= piece.Type == PieceType.Slab;
+                    column |= piece.Type == PieceType.Column;
+                    beam |= piece.Type == PieceType.Beam;
+                    parapet |= piece.Type == PieceType.Parapet;
                     Assert.That(lab.TryGetView(piece.Id, out PieceView view), Is.True);
                     Assert.That(view.Id, Is.EqualTo(piece.Id));
                     Assert.That(view.transform.localScale, Is.EqualTo(Vector3.one));
@@ -49,7 +52,8 @@ namespace Aedifica.Tests.PlayMode
 
                     // Aim at each piece, independent of screen resolution.
                     Vector3 center = view.transform.position + Vector3.up * piece.Dimensions.Y * 0.5f;
-                    camera.transform.position = center + new Vector3(0f, 10f, -3f);
+                    camera.transform.position = center + (piece.Type == PieceType.Column
+                        ? new Vector3(0f, 1f, -10f) : new Vector3(0f, 10f, -3f));
                     camera.transform.LookAt(center);
                     Vector3 screen = camera.WorldToScreenPoint(center);
                     var pointer = new Vector2(screen.x, screen.y);
@@ -59,7 +63,7 @@ namespace Aedifica.Tests.PlayMode
                     interaction.PointerUp(pointer);
                     Assert.That(interaction.SelectedPieceId, Is.EqualTo(piece.Id));
                 }
-                Assert.That(block && wall && slab, Is.True);
+                Assert.That(block && wall && slab && column && beam && parapet, Is.True);
 
                 PieceId wallId = PieceId.Parse("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
                 Assert.That(lab.World.TryGet(wallId, out PieceData original), Is.True);

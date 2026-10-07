@@ -49,6 +49,14 @@ namespace Aedifica.Rendering
                 new PieceTransform(new Vector3(0f, 0.2f, 8.7f), Quaternion.identity), new WallDimensions(8f, 3f, 0.3f)).WithMaterial(LabMaterialIds.Stone));
             world.Add(new PieceData(PieceId.Parse("ffffffffffffffffffffffffffffffff"),
                 new PieceTransform(new Vector3(-3.7f, 0.2f, 6f), Quaternion.Euler(0f, 90f, 0f)), new WallDimensions(5.4f, 2.5f, 0.25f)).WithMaterial(LabMaterialIds.Brick));
+            world.Add(new PieceData(PieceId.Parse("10000000000000000000000000000001"),
+                new PieceTransform(new Vector3(-3f, 0f, -13f), Quaternion.identity), new ColumnDimensions(0.7f, 3f, 0.7f)).WithMaterial(LabMaterialIds.Stone));
+            world.Add(new PieceData(PieceId.Parse("10000000000000000000000000000002"),
+                new PieceTransform(new Vector3(3f, 0f, -13f), Quaternion.identity), new ColumnDimensions(0.7f, 3f, 0.7f)).WithMaterial(LabMaterialIds.Stone));
+            world.Add(new PieceData(PieceId.Parse("10000000000000000000000000000003"),
+                new PieceTransform(new Vector3(0f, 3f, -13f), Quaternion.identity), new BeamDimensions(6.7f, 0.5f, 0.55f)).WithMaterial(LabMaterialIds.Brick));
+            world.Add(new PieceData(PieceId.Parse("10000000000000000000000000000004"),
+                new PieceTransform(new Vector3(0f, 0.2f, 3f), Quaternion.identity), new ParapetDimensions(8f, 0.9f, 0.3f)).WithMaterial(LabMaterialIds.Stone));
 
             foreach (PieceData piece in world.Pieces)
             {

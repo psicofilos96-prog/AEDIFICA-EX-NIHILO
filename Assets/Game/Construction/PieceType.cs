@@ -5,6 +5,9 @@ namespace Aedifica.Construction
         Unknown = 0,
         Block = 1,
         Wall = 2,
-        Slab = 3
+        Slab = 3,
+        Column = 4,
+        Beam = 5,
+        Parapet = 6
     }
 }

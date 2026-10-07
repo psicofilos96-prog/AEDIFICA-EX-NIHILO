@@ -14,9 +14,16 @@ namespace Aedifica.Tests.EditMode
         private static PieceData Piece(PieceId id, PieceType type, Vector3 position, float yaw = 0f)
         {
             var pose = new PieceTransform(position, Quaternion.Euler(0f, yaw, 0f));
-            return type == PieceType.Block ? new PieceData(id, pose, new BlockDimensions(1f, 1f, 1f))
-                : type == PieceType.Wall ? new PieceData(id, pose, new WallDimensions(1f, 1f, 1f))
-                : new PieceData(id, pose, new SlabDimensions(1f, 1f, 1f));
+            switch (type)
+            {
+                case PieceType.Block: return new PieceData(id, pose, new BlockDimensions(1f, 1f, 1f));
+                case PieceType.Wall: return new PieceData(id, pose, new WallDimensions(1f, 1f, 1f));
+                case PieceType.Slab: return new PieceData(id, pose, new SlabDimensions(1f, 1f, 1f));
+                case PieceType.Column: return new PieceData(id, pose, new ColumnDimensions(1f, 1f, 1f));
+                case PieceType.Beam: return new PieceData(id, pose, new BeamDimensions(1f, 1f, 1f));
+                case PieceType.Parapet: return new PieceData(id, pose, new ParapetDimensions(1f, 1f, 1f));
+                default: throw new System.ArgumentOutOfRangeException(nameof(type));
+            }
         }
 
         private static SnapSettings Settings(GeometricSnapKind kind) => new SnapSettings
@@ -121,6 +128,13 @@ namespace Aedifica.Tests.EditMode
         [TestCase(PieceType.Wall, PieceType.Wall, 90f)]
         [TestCase(PieceType.Wall, PieceType.Slab, 0f)]
         [TestCase(PieceType.Slab, PieceType.Slab, 45f)]
+        [TestCase(PieceType.Column, PieceType.Beam, 0f)]
+        [TestCase(PieceType.Column, PieceType.Slab, 45f)]
+        [TestCase(PieceType.Beam, PieceType.Beam, 90f)]
+        [TestCase(PieceType.Beam, PieceType.Column, 0f)]
+        [TestCase(PieceType.Parapet, PieceType.Slab, 45f)]
+        [TestCase(PieceType.Parapet, PieceType.Wall, 90f)]
+        [TestCase(PieceType.Parapet, PieceType.Parapet, 0f)]
         public void AllSnapKindsUseRotatedParametricGeometryAcrossPieceTypes(PieceType movingType, PieceType targetType, float yaw)
         {
             Vector3 axis = Quaternion.Euler(0f, yaw, 0f) * Vector3.right;

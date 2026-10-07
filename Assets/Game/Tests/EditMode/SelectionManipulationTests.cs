@@ -116,6 +116,9 @@ namespace Aedifica.Tests.EditMode
         [TestCase(PieceType.Block)]
         [TestCase(PieceType.Wall)]
         [TestCase(PieceType.Slab)]
+        [TestCase(PieceType.Column)]
+        [TestCase(PieceType.Beam)]
+        [TestCase(PieceType.Parapet)]
         public void FaceResizeKeepsOppositeFaceFixedForAllAxesSignsRotationsAndClamps(PieceType type)
         {
             foreach (float yaw in new[] { 0f, 45f, 90f })
@@ -124,11 +127,7 @@ namespace Aedifica.Tests.EditMode
             foreach (float requested in new[] { 0.5f, -0.5f, -10f, -20f })
             {
                 var transform = new PieceTransform(new Vector3(2f, 3f, 4f), Quaternion.Euler(0f, yaw, 0f));
-                PieceData initial = type == PieceType.Block
-                    ? new PieceData(IdA, transform, new BlockDimensions(2f, 1f, 3f))
-                    : type == PieceType.Wall
-                        ? new PieceData(IdA, transform, new WallDimensions(4f, 3f, 0.2f))
-                        : new PieceData(IdA, transform, new SlabDimensions(4f, 0.2f, 3f));
+                PieceData initial = FaceResizePiece(type, transform);
                 var session = new ManipulationSession(initial, ManipulationMode.Resize, axis,
                     Vector2.zero, Vector2.right, 100f, null, ResizeMode.Face, sign);
                 PieceData result = session.Evaluate(new Vector2(requested * 100f, 0f));
@@ -159,6 +158,20 @@ namespace Aedifica.Tests.EditMode
                 Assert.That(Vector3.Distance(repeated.Transform.Position, result.Transform.Position), Is.LessThan(0.0001f), faceInfo);
                 Assert.That(RotationDirectionError(repeated.Transform.Rotation, result.Transform.Rotation), Is.LessThan(0.0001f), faceInfo);
                 Assert.That(repeated.Dimensions, Is.EqualTo(result.Dimensions), faceInfo);
+            }
+        }
+
+        private static PieceData FaceResizePiece(PieceType type, PieceTransform transform)
+        {
+            switch (type)
+            {
+                case PieceType.Block: return new PieceData(IdA, transform, new BlockDimensions(2f, 1f, 3f));
+                case PieceType.Wall: return new PieceData(IdA, transform, new WallDimensions(4f, 3f, 0.2f));
+                case PieceType.Slab: return new PieceData(IdA, transform, new SlabDimensions(4f, 0.2f, 3f));
+                case PieceType.Column: return new PieceData(IdA, transform, new ColumnDimensions(0.7f, 3f, 0.7f));
+                case PieceType.Beam: return new PieceData(IdA, transform, new BeamDimensions(4f, 0.5f, 0.4f));
+                case PieceType.Parapet: return new PieceData(IdA, transform, new ParapetDimensions(4f, 0.9f, 0.2f));
+                default: throw new ArgumentOutOfRangeException(nameof(type));
             }
         }
 
