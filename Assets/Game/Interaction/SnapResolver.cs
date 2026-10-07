@@ -116,8 +116,9 @@ namespace Aedifica.Interaction
                 if (Vector3.Dot(moving.Normal, target.Normal) > -0.999f) return false;
                 if (target.Triangle)
                 {
-                    Vector3 a = target.A - (target.U + target.V) / 3f;
-                    point = ClosestPointOnTriangle(moving.A, a, a + target.U, a + target.V);
+                    Vector3 triangleVertex = target.A - (target.U + target.V) / 3f;
+                    point = ClosestPointOnTriangle(moving.A, triangleVertex,
+                        triangleVertex + target.U, triangleVertex + target.V);
                     correction = point - moving.A;
                     return true;
                 }
