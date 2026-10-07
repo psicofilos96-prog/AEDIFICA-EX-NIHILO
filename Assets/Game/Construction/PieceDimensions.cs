@@ -8,7 +8,8 @@ namespace Aedifica.Construction
     {
         public PieceType Type { get; }
         public float X { get; }
-        public float Y { get; }
+        private readonly float height;
+        public float Y => IsSlopedRoof ? roofThickness + Rise : height;
         public float Z { get; }
         // Rise is authoritative for sloped roofs; Y is the derived total height.
         public float Rise { get; }
@@ -24,9 +25,9 @@ namespace Aedifica.Construction
         public PieceDimensions(BeamDimensions dimensions) : this(PieceType.Beam, dimensions.Length, dimensions.Height, dimensions.Width, dimensions.IsValid) { }
         public PieceDimensions(ParapetDimensions dimensions) : this(PieceType.Parapet, dimensions.Length, dimensions.Height, dimensions.Thickness, dimensions.IsValid) { }
         public PieceDimensions(FlatRoofDimensions dimensions) : this(PieceType.FlatRoof, dimensions.Width, dimensions.Thickness, dimensions.Depth, 0f, dimensions.Thickness, dimensions.IsValid) { }
-        public PieceDimensions(ShedRoofDimensions dimensions) : this(PieceType.ShedRoof, dimensions.Width, dimensions.Thickness + dimensions.Rise, dimensions.Depth, dimensions.Rise, dimensions.Thickness, dimensions.IsValid) { }
-        public PieceDimensions(GableRoofDimensions dimensions) : this(PieceType.GableRoof, dimensions.Width, dimensions.Thickness + dimensions.Rise, dimensions.Depth, dimensions.Rise, dimensions.Thickness, dimensions.IsValid) { }
-        public PieceDimensions(HipRoofDimensions dimensions) : this(PieceType.HipRoof, dimensions.Width, dimensions.Thickness + dimensions.Rise, dimensions.Depth, dimensions.Rise, dimensions.Thickness, dimensions.IsValid) { }
+        public PieceDimensions(ShedRoofDimensions dimensions) : this(PieceType.ShedRoof, dimensions.Width, 0f, dimensions.Depth, dimensions.Rise, dimensions.Thickness, dimensions.IsValid) { }
+        public PieceDimensions(GableRoofDimensions dimensions) : this(PieceType.GableRoof, dimensions.Width, 0f, dimensions.Depth, dimensions.Rise, dimensions.Thickness, dimensions.IsValid) { }
+        public PieceDimensions(HipRoofDimensions dimensions) : this(PieceType.HipRoof, dimensions.Width, 0f, dimensions.Depth, dimensions.Rise, dimensions.Thickness, dimensions.IsValid) { }
 
         private PieceDimensions(PieceType type, float x, float y, float z, bool valid)
             : this(type, x, y, z, 0f, 0f, valid) { }
@@ -36,7 +37,7 @@ namespace Aedifica.Construction
             if (!valid) throw new ArgumentException("Piece dimensions must be valid.");
             Type = type;
             X = x;
-            Y = y;
+            height = y;
             Z = z;
             Rise = rise;
             roofThickness = thickness;
@@ -45,7 +46,7 @@ namespace Aedifica.Construction
         public bool IsValid => (Type == PieceType.Block || Type == PieceType.Wall || Type == PieceType.Slab ||
             Type == PieceType.Column || Type == PieceType.Beam || Type == PieceType.Parapet || IsRoof) &&
             Positive(X) && Positive(Y) && Positive(Z) && (IsSlopedRoof
-                ? Positive(Rise) && Positive(roofThickness) && Y == Rise + roofThickness
+                ? Positive(Rise) && Positive(roofThickness)
                 : IsRoof ? Rise == 0f && roofThickness == Y : Rise == 0f && roofThickness == 0f);
         private static bool Positive(float value) => value > 0f && !float.IsNaN(value) && !float.IsInfinity(value);
 

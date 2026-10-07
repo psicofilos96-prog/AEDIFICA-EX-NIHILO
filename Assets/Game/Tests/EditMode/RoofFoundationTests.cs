@@ -28,6 +28,24 @@ namespace Aedifica.Tests.EditMode
             }
         }
 
+        [Test]
+        public void ValidSlopedParametersProduceValidTaggedDimensions()
+        {
+            foreach (PieceDimensions dimensions in new[] {
+                new PieceDimensions(new ShedRoofDimensions(4f, 3f, 0.2f, 1f)),
+                new PieceDimensions(new GableRoofDimensions(4f, 3f, 0.2f, 1f)),
+                new PieceDimensions(new HipRoofDimensions(4f, 3f, 0.2f, 1f)) })
+            {
+                Assert.That(dimensions.IsSlopedRoof, Is.True, dimensions.Type.ToString());
+                Assert.That(dimensions.IsValid, Is.True, dimensions.Type.ToString());
+                Assert.That(dimensions.RoofThickness, Is.EqualTo(0.2f), dimensions.Type.ToString());
+                Assert.That(dimensions.Rise, Is.EqualTo(1f), dimensions.Type.ToString());
+                Assert.That(dimensions.Y, Is.EqualTo(dimensions.RoofThickness + dimensions.Rise), dimensions.Type.ToString());
+                Assert.That(new PieceData(A, new PieceTransform(Vector3.zero, Quaternion.identity), dimensions).Dimensions,
+                    Is.EqualTo(dimensions));
+            }
+        }
+
         [TestCase(PieceType.FlatRoof)]
         [TestCase(PieceType.ShedRoof)]
         [TestCase(PieceType.GableRoof)]

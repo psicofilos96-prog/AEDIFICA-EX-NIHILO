@@ -38,6 +38,11 @@ namespace Aedifica.Rendering
             if (Id.IsValid) throw new InvalidOperationException("PieceView is already initialized.");
             Id = piece.Id;
             materialRegistry = registry;
+            if (piece.Dimensions.IsSlopedRoof)
+            {
+                roofCollider = GetComponent<MeshCollider>();
+                if (roofCollider == null) roofCollider = gameObject.AddComponent<MeshCollider>();
+            }
             Refresh(piece);
         }
 
@@ -58,7 +63,6 @@ namespace Aedifica.Rendering
                 meshFilter.sharedMesh = replacement;
                 if (piece.Dimensions.IsSlopedRoof)
                 {
-                    if (roofCollider == null) roofCollider = gameObject.GetComponent<MeshCollider>() ?? gameObject.AddComponent<MeshCollider>();
                     roofCollider.sharedMesh = null;
                     roofCollider.sharedMesh = replacement;
                     roofCollider.enabled = true;

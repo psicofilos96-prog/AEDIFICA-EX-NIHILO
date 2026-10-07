@@ -7,6 +7,50 @@ namespace Aedifica.Tests.PlayMode
 {
     public sealed class PieceViewPlayModeTests
     {
+        [TestCase(PieceType.ShedRoof)]
+        [TestCase(PieceType.GableRoof)]
+        [TestCase(PieceType.HipRoof)]
+        public void SlopedRoofViewCreatesMeshColliderBeforeRefresh(PieceType type)
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.That(shader, Is.Not.Null);
+            var material = new Material(shader);
+            var gameObject = new GameObject("Test Sloped Roof View");
+            try
+            {
+                PieceId id = PieceId.Parse("cccccccccccccccccccccccccccccccc");
+                var transform = new PieceTransform(Vector3.zero, Quaternion.identity);
+                PieceData piece;
+                switch (type)
+                {
+                    case PieceType.ShedRoof: piece = new PieceData(id, transform, new ShedRoofDimensions(4f, 3f, 0.2f, 1f)); break;
+                    case PieceType.GableRoof: piece = new PieceData(id, transform, new GableRoofDimensions(4f, 3f, 0.2f, 1f)); break;
+                    default: piece = new PieceData(id, transform, new HipRoofDimensions(4f, 3f, 0.2f, 1f)); break;
+                }
+                PieceView view = gameObject.AddComponent<PieceView>();
+                view.Initialize(piece, material);
+                MeshCollider roofCollider = gameObject.GetComponent<MeshCollider>();
+                Mesh mesh = gameObject.GetComponent<MeshFilter>().sharedMesh;
+                Assert.That(roofCollider, Is.Not.Null);
+                Assert.That(roofCollider.enabled, Is.True);
+                Assert.That(roofCollider.sharedMesh, Is.SameAs(mesh));
+                Assert.That(gameObject.GetComponent<BoxCollider>().enabled, Is.False);
+                Assert.That(gameObject.transform.localScale, Is.EqualTo(Vector3.one));
+                view.Refresh(piece.WithMaterial(LabMaterialIds.Stone));
+                Assert.That(gameObject.GetComponent<MeshFilter>().sharedMesh, Is.SameAs(mesh));
+                Assert.That(roofCollider.sharedMesh, Is.SameAs(mesh));
+                view.Refresh(piece.WithRise(1.2f));
+                Assert.That(gameObject.GetComponent<MeshFilter>().sharedMesh, Is.Not.SameAs(mesh));
+                Assert.That(roofCollider.sharedMesh, Is.SameAs(gameObject.GetComponent<MeshFilter>().sharedMesh));
+                Assert.That(gameObject.GetComponents<MeshCollider>().Length, Is.EqualTo(1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(gameObject);
+                Object.DestroyImmediate(material);
+            }
+        }
+
         [Test]
         public void ViewRebuildsFromReplacementDataWithUnitScaleAndDerivedCollider()
         {
