@@ -36,12 +36,14 @@ namespace Aedifica.Tests.EditMode
                 var cameraObject = new SerializedObject(controller);
                 SerializedProperty settings = cameraObject.FindProperty("settings");
                 Assert.That(settings, Is.Not.Null, "CameraSettings must be serialized on the real lab camera.");
+                Assert.That(settings.FindPropertyRelative("moveSpeedMin").floatValue, Is.EqualTo(8f).Within(0.000001f));
                 Assert.That(settings.FindPropertyRelative("zoomMinDistance").floatValue, Is.EqualTo(0.5f).Within(0.000001f));
                 Assert.That(settings.FindPropertyRelative("zoomSpeed").floatValue, Is.EqualTo(0.30f).Within(0.000001f));
                 Assert.That(settings.FindPropertyRelative("orbitYawSensitivity").floatValue, Is.EqualTo(0.18f).Within(0.000001f));
                 Assert.That(settings.FindPropertyRelative("orbitPitchSensitivity").floatValue, Is.EqualTo(0.18f).Within(0.000001f));
                 Assert.That(settings.FindPropertyRelative("invertHorizontal").boolValue, Is.False);
                 Assert.That(settings.FindPropertyRelative("invertVertical").boolValue, Is.False);
+                Assert.That(new CameraSettings().moveSpeedMin, Is.EqualTo(3f));
                 Assert.That(new CameraSettings().zoomMinDistance, Is.EqualTo(0.5f));
                 Assert.That(new CameraSettings().orbitYawSensitivity, Is.EqualTo(0.18f));
                 Assert.That(new CameraSettings().orbitPitchSensitivity, Is.EqualTo(0.18f));

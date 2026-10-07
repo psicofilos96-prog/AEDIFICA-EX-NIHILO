@@ -270,7 +270,7 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   settings:
-    moveSpeedMin: 3
+    moveSpeedMin: 8
     moveSpeedMax: 150
     zoomSpeed: 0.3
     zoomMinDistance: 0.5

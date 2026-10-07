@@ -215,6 +215,43 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
+        public void WasdReachesRearDomeRegionEvenWhenZoomedIn()
+        {
+            var settings = new CameraSettings { smoothing = 0f, moveSpeedMin = 8f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+            float wheelStep = CameraScrollProcessor.Process(1f, out _);
+            for (int i = 0; i < 20; i++)
+                motion.Step(new CameraInput { Scroll = wheelStep }, 0.016f, settings);
+            Assert.That(motion.Focus, Is.EqualTo(Vector3.zero), "Wheel zoom must not move the navigation center toward the dome.");
+            Assert.That(motion.Distance, Is.EqualTo(0.5f));
+            var rearDome = new Vector3(12f, 0f, 27f);
+            var direction = new Vector2(rearDome.x, rearDome.z).normalized;
+            motion.Step(new CameraInput { Move = direction }, 4f, settings);
+            Assert.That(Vector3.Distance(motion.Focus, rearDome), Is.LessThan(3f));
+            Assert.That(motion.Distance, Is.EqualTo(0.5f));
+            Assert.That(motion.Pitch, Is.EqualTo(45f));
+            Assert.That(motion.Yaw, Is.Zero);
+        }
+
+        [Test]
+        public void WasdContinuesPastRearDomeWithoutSpatialClamp()
+        {
+            var settings = new CameraSettings { smoothing = 0f, moveSpeedMin = 8f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, settings.zoomMinDistance, settings);
+            float previousZ = motion.Focus.z;
+            for (int i = 0; i < 60; i++)
+            {
+                motion.Step(new CameraInput { Move = Vector2.up }, 1f, settings);
+                Assert.That(motion.Focus.z, Is.GreaterThan(previousZ));
+                Assert.That(motion.Focus.x, Is.Zero);
+                Assert.That(motion.Focus.y, Is.Zero);
+                previousZ = motion.Focus.z;
+            }
+            Assert.That(motion.Focus.z, Is.GreaterThan(150f));
+            Assert.That(motion.Distance, Is.EqualTo(0.5f));
+        }
+
+        [Test]
         public void WasdAndKeyboardYawPreservePitchAndDistance()
         {
             var settings = new CameraSettings { smoothing = 0f };
