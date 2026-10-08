@@ -1,0 +1,7 @@
+# ADR 0015 — Fronteira de mutação E1a
+
+`ConstructionWorld.Create`, `Update` e `Delete` são a fronteira lógica de mutação. Cada chamada retorna um `ConstructionChangeSet` com operação, status (`Changed`, `NoChange` ou `Rejected`), ID, `PieceData` anterior/posterior e AABBs mundiais correspondentes quando há peça. Cada registro afeta exatamente um ID; não enumera nem copia o mundo. `Changed` é emitido de forma síncrona **após** a mutação lógica e apenas para mudanças efetivas. Observadores devem considerar que a representação visual pode ser atualizada logo em seguida pelo chamador.
+
+`Update` rejeita ID ausente, ID diferente e mudança de tipo. Compara transformação, dimensões, material e valores de todas as aberturas; equivalência semântica retorna `NoChange` e preserva a instância original. Construtores de `PieceData` continuam rejeitando estado inválido antes de qualquer mutação. A AABB usa as dimensões locais, a base como pivô e a rotação da peça, sem reconstruir a malha.
+
+Os métodos `Add`, `Replace` e `Remove` continuam disponíveis para os consumidores atuais e delegam à mesma fronteira. `Replace` mantém seu retorno `true` para uma substituição válida sem alteração. `ConstructionLabBlocks` aplica mudanças efetivas à `PieceView`, evitando refresh no-op. Esta etapa não implementa transação de múltiplas peças, histórico reversível, índice espacial ou renderização agrupada; um comando futuro poderá agrupar esses registros e invalidar regiões derivadas de `BoundsBefore` e `BoundsAfter`.

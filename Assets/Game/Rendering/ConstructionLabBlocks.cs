@@ -98,7 +98,7 @@ namespace Aedifica.Rendering
 
         public bool Add(PieceData piece)
         {
-            if (piece == null || !world.Add(piece)) return false;
+            if (piece == null || !world.Create(piece).Changed) return false;
             var viewObject = new GameObject($"Lab {piece.Type} {piece.Id}");
             viewObject.transform.SetParent(transform, false);
             try
@@ -110,7 +110,7 @@ namespace Aedifica.Rendering
             }
             catch
             {
-                world.Remove(piece.Id);
+                world.Delete(piece.Id);
                 Destroy(viewObject);
                 throw;
             }
@@ -118,8 +118,21 @@ namespace Aedifica.Rendering
 
         public bool Apply(PieceData replacement)
         {
-            if (replacement == null || !world.Replace(replacement.Id, replacement)) return false;
-            views[replacement.Id].Refresh(replacement);
+            if (replacement == null) return false;
+            ConstructionChangeSet change = world.Update(replacement.Id, replacement);
+            if (change.Status == ConstructionChangeStatus.Rejected) return false;
+            if (change.Changed) views[replacement.Id].Refresh(replacement);
+            return true;
+        }
+
+        public bool Delete(PieceId id)
+        {
+            if (!world.Delete(id).Changed) return false;
+            if (views.TryGetValue(id, out PieceView view))
+            {
+                views.Remove(id);
+                if (view != null) Destroy(view.gameObject);
+            }
             return true;
         }
 

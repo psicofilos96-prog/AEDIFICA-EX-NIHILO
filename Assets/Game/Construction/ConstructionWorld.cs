@@ -9,20 +9,67 @@ namespace Aedifica.Construction
 
         public int Count => pieces.Count;
         public IEnumerable<PieceData> Pieces => pieces.Values;
+        public event Action<ConstructionChangeSet> Changed;
+
+        public ConstructionChangeSet Create(PieceData piece)
+        {
+            if (piece == null) throw new ArgumentNullException(nameof(piece));
+            if (!pieces.TryAdd(piece.Id, piece))
+                return new ConstructionChangeSet(ConstructionOperation.Create, ConstructionChangeStatus.Rejected,
+                    piece.Id, pieces[piece.Id], null);
+            var change = new ConstructionChangeSet(ConstructionOperation.Create, ConstructionChangeStatus.Changed,
+                piece.Id, null, piece);
+            Changed?.Invoke(change);
+            return change;
+        }
+
+        public ConstructionChangeSet Update(PieceId id, PieceData replacement)
+        {
+            if (replacement == null) throw new ArgumentNullException(nameof(replacement));
+            PieceData current = null;
+            if (!id.IsValid || replacement.Id != id || !pieces.TryGetValue(id, out current) ||
+                current.Type != replacement.Type)
+                return new ConstructionChangeSet(ConstructionOperation.Update, ConstructionChangeStatus.Rejected,
+                    id, current, null);
+            if (SameState(current, replacement))
+                return new ConstructionChangeSet(ConstructionOperation.Update, ConstructionChangeStatus.NoChange,
+                    id, current, current);
+            pieces[id] = replacement;
+            var change = new ConstructionChangeSet(ConstructionOperation.Update, ConstructionChangeStatus.Changed,
+                id, current, replacement);
+            Changed?.Invoke(change);
+            return change;
+        }
+
+        public ConstructionChangeSet Delete(PieceId id)
+        {
+            if (!id.IsValid || !pieces.TryGetValue(id, out PieceData current))
+                return new ConstructionChangeSet(ConstructionOperation.Delete, ConstructionChangeStatus.Rejected,
+                    id, null, null);
+            pieces.Remove(id);
+            var change = new ConstructionChangeSet(ConstructionOperation.Delete, ConstructionChangeStatus.Changed,
+                id, current, null);
+            Changed?.Invoke(change);
+            return change;
+        }
+
+        private static bool SameState(PieceData a, PieceData b)
+        {
+            if (!a.Transform.Equals(b.Transform) || !a.Dimensions.Equals(b.Dimensions) ||
+                a.MaterialId != b.MaterialId || a.Openings.Count != b.Openings.Count) return false;
+            for (int i = 0; i < a.Openings.Count; i++)
+                if (!a.Openings[i].Equals(b.Openings[i])) return false;
+            return true;
+        }
 
         public bool Add(PieceData piece)
         {
-            if (piece == null) throw new ArgumentNullException(nameof(piece));
-            return pieces.TryAdd(piece.Id, piece);
+            return Create(piece).Changed;
         }
 
         public bool Replace(PieceId id, PieceData replacement)
         {
-            if (replacement == null) throw new ArgumentNullException(nameof(replacement));
-            if (!id.IsValid || replacement.Id != id || !pieces.TryGetValue(id, out PieceData current) ||
-                current.Type != replacement.Type) return false;
-            pieces[id] = replacement;
-            return true;
+            return Update(id, replacement).Status != ConstructionChangeStatus.Rejected;
         }
 
         public bool TryGet(PieceId id, out PieceData piece)
@@ -31,6 +78,6 @@ namespace Aedifica.Construction
             return id.IsValid && pieces.TryGetValue(id, out piece);
         }
 
-        public bool Remove(PieceId id) => id.IsValid && pieces.Remove(id);
+        public bool Remove(PieceId id) => Delete(id).Changed;
     }
 }
