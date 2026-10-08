@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Reflection;
 using Aedifica.Construction;
 using Aedifica.Interaction;
 using Aedifica.Interaction.Camera;
@@ -13,6 +14,88 @@ namespace Aedifica.Tests.PlayMode
 {
     public sealed class ConstructionLabSelectionPlayModeTests
     {
+        [UnityTest]
+        public IEnumerator HomeFramesSelectedRearDomeAndDoesNothingWithoutSelection()
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.That(shader, Is.Not.Null);
+            var material = new Material(shader);
+            var cameraObject = new GameObject("Home framing test camera");
+            var labObject = new GameObject("Home framing test lab");
+            labObject.SetActive(false);
+            Keyboard testKeyboard = null;
+            Mouse testMouse = null;
+            try
+            {
+                var camera = cameraObject.AddComponent<UnityEngine.Camera>();
+                camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
+                var cityCamera = cameraObject.AddComponent<CityBuilderCamera>();
+                var lab = labObject.AddComponent<ConstructionLabBlocks>();
+                var interaction = labObject.AddComponent<ConstructionLabInteraction>();
+                lab.ConfigureMaterial(material);
+                interaction.Configure(camera, cityCamera);
+                labObject.SetActive(true);
+                yield return null;
+
+                testKeyboard = InputSystem.AddDevice<Keyboard>();
+                testMouse = InputSystem.AddDevice<Mouse>();
+                testKeyboard.MakeCurrent();
+                testMouse.MakeCurrent();
+                MethodInfo update = typeof(ConstructionLabInteraction).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance);
+                Assert.That(update, Is.Not.Null);
+                void PressHome()
+                {
+                    InputSystem.QueueStateEvent(testKeyboard, new KeyboardState(Key.Home));
+                    InputSystem.Update();
+                    update.Invoke(interaction, null);
+                    InputSystem.QueueStateEvent(testKeyboard, new KeyboardState());
+                    InputSystem.Update();
+                }
+
+                Vector3 originalPosition = camera.transform.position;
+                PressHome();
+                yield return null;
+                Assert.That(camera.transform.position, Is.EqualTo(originalPosition), "Home without selection must leave the camera unchanged.");
+
+                PieceId domeId = PieceId.Parse("50000000000000000000000000000003");
+                Assert.That(lab.TryGetView(domeId, out PieceView dome), Is.True);
+                Bounds bounds = dome.GetComponent<MeshRenderer>().bounds;
+                camera.transform.position = bounds.center + new Vector3(0f, 7f, -12f);
+                camera.transform.LookAt(bounds.center);
+                Vector3 screen = camera.WorldToScreenPoint(bounds.center);
+                var pointer = new Vector2(screen.x, screen.y);
+                Assert.That(interaction.TryPickPieceAt(pointer, out PieceId picked), Is.True);
+                Assert.That(picked, Is.EqualTo(domeId));
+                interaction.PointerDown(pointer);
+                interaction.PointerUp(pointer);
+                Assert.That(interaction.SelectedPieceId, Is.EqualTo(domeId));
+
+                PressHome();
+                yield return new WaitForSecondsRealtime(0.6f);
+                Vector3 centerOnScreen = camera.WorldToViewportPoint(bounds.center);
+                Assert.That(centerOnScreen.x, Is.EqualTo(0.5f).Within(0.01f));
+                Assert.That(centerOnScreen.y, Is.EqualTo(0.5f).Within(0.01f));
+                foreach (int x in new[] { -1, 1 })
+                foreach (int y in new[] { -1, 1 })
+                foreach (int z in new[] { -1, 1 })
+                {
+                    Vector3 corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z));
+                    Vector3 projected = camera.WorldToViewportPoint(corner);
+                    Assert.That(projected.z, Is.GreaterThan(camera.nearClipPlane));
+                    Assert.That(projected.x, Is.InRange(0.08f, 0.92f));
+                    Assert.That(projected.y, Is.InRange(0.08f, 0.92f));
+                }
+            }
+            finally
+            {
+                if (testMouse != null) InputSystem.RemoveDevice(testMouse);
+                if (testKeyboard != null) InputSystem.RemoveDevice(testKeyboard);
+                Object.DestroyImmediate(labObject);
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(material);
+            }
+        }
+
         [UnityTest]
         public IEnumerator ControllerPicksAndSelectsRuntimeBlockThroughCameraRayAndCollider()
         {

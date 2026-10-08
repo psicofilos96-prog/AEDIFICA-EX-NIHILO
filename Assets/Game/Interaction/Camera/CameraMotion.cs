@@ -33,6 +33,32 @@ namespace Aedifica.Interaction.Camera
             targetPitch = Pitch;
         }
 
+        // Frame the world-space renderer bounds within the current camera projection.
+        // Only an explicit command changes the navigation center this way.
+        public void FrameBounds(Bounds bounds, float verticalFieldOfView, float aspect, float nearClip, CameraSettings settings)
+        {
+            settings.Normalize();
+            if (IsOrbiting) return;
+            float halfVertical = Mathf.Tan(Mathf.Clamp(verticalFieldOfView, 1f, 179f) * Mathf.Deg2Rad * 0.5f) * 0.8f;
+            float halfHorizontal = halfVertical * Mathf.Max(0.01f, aspect);
+            Quaternion inverse = Quaternion.Inverse(Quaternion.Euler(targetPitch, targetYaw, 0f));
+            Vector3 extent = bounds.extents;
+            float requiredDistance = settings.zoomMinDistance;
+            for (int x = -1; x <= 1; x += 2)
+            for (int y = -1; y <= 1; y += 2)
+            for (int z = -1; z <= 1; z += 2)
+            {
+                Vector3 corner = new Vector3(x * extent.x, y * extent.y, z * extent.z);
+                Vector3 local = inverse * corner;
+                requiredDistance = Mathf.Max(requiredDistance,
+                    Mathf.Abs(local.x) / halfHorizontal - local.z,
+                    Mathf.Abs(local.y) / halfVertical - local.z,
+                    Mathf.Max(0f, nearClip) + 0.1f - local.z);
+            }
+            targetFocus = bounds.center;
+            targetDistance = Mathf.Clamp(requiredDistance, settings.zoomMinDistance, settings.zoomMaxDistance);
+        }
+
         public CameraMotion(Vector3 focus, float yaw, float pitch, float distance, CameraSettings settings)
         {
             settings.Normalize();

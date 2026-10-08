@@ -31,6 +31,15 @@ namespace Aedifica.Interaction.Camera
 
         public void EndPan() => panActive = false;
 
+        public bool FrameBounds(Bounds bounds)
+        {
+            if (motion == null || panActive || motion.IsOrbiting ||
+                Mouse.current != null && Mouse.current.rightButton.isPressed) return false;
+            UnityEngine.Camera sceneCamera = GetComponent<UnityEngine.Camera>();
+            motion.FrameBounds(bounds, sceneCamera.fieldOfView, sceneCamera.aspect, sceneCamera.nearClipPlane, settings);
+            return true;
+        }
+
         private void OnValidate() => settings?.Normalize();
 
         private void Awake()

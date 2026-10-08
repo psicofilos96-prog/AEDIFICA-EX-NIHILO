@@ -88,6 +88,7 @@ namespace Aedifica.Interaction
                 if (keyboard.pageDownKey.wasPressedThisFrame) AdjustSelectedRoofRise(-0.1f);
                 if (keyboard.leftBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(-1);
                 if (keyboard.rightBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(1);
+                if (keyboard.homeKey.wasPressedThisFrame) FrameSelected();
             }
 
             Mouse mouse = Mouse.current;
@@ -192,6 +193,12 @@ namespace Aedifica.Interaction
             int steps = Mathf.Clamp(piece.Dimensions.StepCount + delta, 1, StairDimensions.MaximumStepCount);
             if (steps == piece.Dimensions.StepCount) return;
             if (lab.Apply(piece.WithStepCount(steps))) Debug.Log($"Stair StepCount: {steps}", this);
+        }
+
+        public bool FrameSelected()
+        {
+            if (!(selection.SelectedPieceId is PieceId id) || !lab.TryGetView(id, out PieceView view)) return false;
+            return cityCamera.FrameBounds(view.GetComponent<MeshRenderer>().bounds);
         }
 
         public bool TryPickPieceAt(Vector2 pointer, out PieceId id)

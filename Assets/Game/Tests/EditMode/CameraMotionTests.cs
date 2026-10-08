@@ -311,6 +311,73 @@ namespace Aedifica.Tests.EditMode
                 "At ground-level Focus, the dome center cannot remain visible at minimum Distance.");
         }
 
+        [TestCase(0f, 45f, 4f, 2.5f, 4f)]
+        [TestCase(45f, 15f, 4f, 2.5f, 4f)]
+        [TestCase(90f, 80f, 40f, 25f, 30f)]
+        public void ExplicitFramingFitsEveryWorldBoundsCorner(float yaw, float pitch, float width, float height, float depth)
+        {
+            var cameraObject = new GameObject("Bounds framing projection test");
+            try
+            {
+                var camera = cameraObject.AddComponent<UnityEngine.Camera>();
+                camera.fieldOfView = 60f;
+                camera.aspect = 16f / 9f;
+                camera.nearClipPlane = 0.3f;
+                var settings = new CameraSettings { smoothing = 0f };
+                var motion = new CameraMotion(Vector3.zero, yaw, pitch, 25f, settings);
+                var bounds = new Bounds(new Vector3(12f, height * 0.5f, 27f), new Vector3(width, height, depth));
+                motion.FrameBounds(bounds, camera.fieldOfView, camera.aspect, camera.nearClipPlane, settings);
+                motion.Step(new CameraInput(), 0.016f, settings);
+                Assert.That(Vector3.Distance(motion.Focus, bounds.center), Is.LessThan(0.0001f));
+                Assert.That(motion.Yaw, Is.EqualTo(yaw));
+                Assert.That(motion.Pitch, Is.EqualTo(pitch));
+                camera.transform.SetPositionAndRotation(motion.Position, motion.Rotation);
+                foreach (int x in new[] { -1, 1 })
+                foreach (int y in new[] { -1, 1 })
+                foreach (int z in new[] { -1, 1 })
+                {
+                    Vector3 corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z));
+                    Vector3 projected = camera.WorldToViewportPoint(corner);
+                    Assert.That(projected.z, Is.GreaterThan(camera.nearClipPlane), $"Corner {corner} is behind the near plane.");
+                    Assert.That(projected.x, Is.InRange(0.09f, 0.91f), $"Corner {corner} is outside horizontal framing.");
+                    Assert.That(projected.y, Is.InRange(0.09f, 0.91f), $"Corner {corner} is outside vertical framing.");
+                }
+            }
+            finally { Object.DestroyImmediate(cameraObject); }
+        }
+
+        [Test]
+        public void ExplicitFramingTransitionsSmoothlyThenKeepsExistingControls()
+        {
+            var settings = new CameraSettings();
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+            var bounds = new Bounds(new Vector3(12f, 1.25f, 27f), new Vector3(4f, 2.5f, 4f));
+            motion.FrameBounds(bounds, 60f, 16f / 9f, 0.3f, settings);
+            Assert.That(motion.Focus, Is.EqualTo(Vector3.zero));
+            Assert.That(motion.Distance, Is.EqualTo(25f));
+            motion.Step(new CameraInput(), 0.016f, settings);
+            Assert.That(motion.Focus.z, Is.GreaterThan(0f).And.LessThan(bounds.center.z));
+            motion.Step(new CameraInput(), 0.5f, settings);
+            Assert.That(Vector3.Distance(motion.Focus, bounds.center), Is.LessThan(0.05f));
+            motion.Step(new CameraInput(), 1f, settings);
+            Vector3 focus = motion.Focus;
+            float framedDistance = motion.Distance;
+            motion.BeginOrbit();
+            motion.FrameBounds(new Bounds(Vector3.zero, Vector3.one), 60f, 16f / 9f, 0.3f, settings);
+            motion.Step(new CameraInput { RotatePixels = new Vector2(10f, -10f) }, 0.016f, settings);
+            Assert.That(motion.Yaw, Is.EqualTo(1.8f).Within(0.001f));
+            Assert.That(motion.Pitch, Is.EqualTo(46.8f).Within(0.001f));
+            Assert.That(motion.Focus, Is.EqualTo(focus));
+            Assert.That(motion.Distance, Is.EqualTo(framedDistance));
+            motion.EndOrbit();
+            motion.Step(new CameraInput { Scroll = CameraScrollProcessor.Process(1f, out _) }, 0.5f, settings);
+            Assert.That(motion.Distance, Is.LessThan(framedDistance));
+            Assert.That(motion.Focus, Is.EqualTo(focus));
+            motion.Step(new CameraInput { Move = Vector2.up, KeyboardYaw = 1f }, 0.1f, settings);
+            Assert.That(Vector3.Distance(motion.Focus, focus), Is.GreaterThan(0f));
+            Assert.That(motion.Yaw, Is.GreaterThan(1.8f));
+        }
+
         [Test]
         public void WasdAndKeyboardYawPreservePitchAndDistance()
         {
