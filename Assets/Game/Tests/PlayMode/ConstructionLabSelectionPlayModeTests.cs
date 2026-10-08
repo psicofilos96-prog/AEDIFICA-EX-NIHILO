@@ -184,20 +184,54 @@ namespace Aedifica.Tests.PlayMode
             {
                 var camera = cameraObject.AddComponent<UnityEngine.Camera>();
                 camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
-                cameraObject.AddComponent<CityBuilderCamera>();
+                var controller = cameraObject.AddComponent<CityBuilderCamera>();
                 testMouse = InputSystem.AddDevice<Mouse>();
                 testMouse.MakeCurrent();
                 yield return null;
                 var pointer = new Vector2(400f, 300f);
-                Assert.That(Physics.Raycast(camera.ScreenPointToRay(pointer), 1000f), Is.False);
+                Ray groundRay = camera.ScreenPointToRay(pointer);
+                Assert.That(Physics.Raycast(groundRay, 1000f), Is.False);
+                Assert.That(new Plane(Vector3.up, Vector3.zero).Raycast(groundRay, out float planeDistance), Is.True);
+                Assert.That(planeDistance, Is.InRange(0f, 100f), "The bounded construction-plane fallback must be reachable.");
                 Vector3 before = camera.transform.position;
-                InputSystem.QueueStateEvent(testMouse, new MouseState { position = pointer, scroll = Vector2.up });
-                yield return null;
-                InputSystem.QueueStateEvent(testMouse, new MouseState { position = pointer });
+                var update = typeof(CityBuilderCamera).GetMethod("Update",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                Assert.That(update, Is.Not.Null);
+                void Scroll(Vector2 position, float amount)
+                {
+                    InputSystem.QueueStateEvent(testMouse, new MouseState
+                        { position = position, scroll = new Vector2(0f, amount) });
+                    InputSystem.Update();
+                    Assert.That(Mouse.current, Is.SameAs(testMouse));
+                    Assert.That(testMouse.scroll.ReadValue().y, Is.EqualTo(amount),
+                        "The transient scroll event must be present when the camera reads input.");
+                    update.Invoke(controller, null); // Exercise the real input, fallback, motion and transform path.
+                    InputSystem.QueueStateEvent(testMouse, new MouseState { position = position });
+                    InputSystem.Update();
+                }
+                Scroll(pointer, 1f);
                 yield return new WaitForSecondsRealtime(0.3f);
                 Assert.That(Vector3.Distance(before, camera.transform.position), Is.GreaterThan(0.1f));
                 Assert.That(Vector3.Distance(before, camera.transform.position), Is.LessThan(20f));
                 Assert.That(float.IsNaN(camera.transform.position.x), Is.False);
+                Vector3 afterApproach = camera.transform.position;
+                Scroll(pointer, -1f);
+                yield return new WaitForSecondsRealtime(0.3f);
+                Assert.That(Vector3.Distance(camera.transform.position, before),
+                    Is.LessThan(Vector3.Distance(afterApproach, before)),
+                    "Scrolling out over empty ground must recover the wider view.");
+
+                camera.fieldOfView = 100f;
+                var skyPointer = new Vector2(400f, 599f);
+                Ray skyRay = camera.ScreenPointToRay(skyPointer);
+                Assert.That(Physics.Raycast(skyRay, 1000f), Is.False);
+                Assert.That(new Plane(Vector3.up, Vector3.zero).Raycast(skyRay, out _), Is.False,
+                    "This ray must use orbital zoom because it points above the construction plane.");
+                Vector3 beforeSky = camera.transform.position;
+                Scroll(skyPointer, 1f);
+                yield return new WaitForSecondsRealtime(0.3f);
+                Assert.That(Vector3.Distance(beforeSky, camera.transform.position), Is.GreaterThan(0.1f));
+                Assert.That(Vector3.Distance(beforeSky, camera.transform.position), Is.LessThan(20f));
             }
             finally
             {

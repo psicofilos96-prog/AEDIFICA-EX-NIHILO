@@ -30,6 +30,28 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
+        public void EmptyGroundAtViewportCenterAdvancesAndScrollOutRecoversDistance()
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+            Vector3 originalPosition = motion.Position;
+            Vector3 forward = motion.Rotation * Vector3.forward;
+            Assert.That(motion.ZoomToward(Vector3.zero, forward, 0.75f, 0.3f, false, settings), Is.True);
+            motion.Step(default, 0.016f, settings);
+            float expectedDistance = 25f * Mathf.Exp(-0.75f * settings.zoomSpeed);
+            float expectedDepth = 0.4f + (25f - 0.4f) * Mathf.Exp(-0.75f * settings.zoomSpeed);
+            Assert.That(motion.Distance, Is.EqualTo(expectedDistance).Within(0.0001f));
+            Assert.That(Vector3.Distance(motion.Position, originalPosition),
+                Is.EqualTo(25f - expectedDepth).Within(0.0001f));
+            Assert.That(Vector3.Distance(motion.Focus, forward * (expectedDistance - expectedDepth)),
+                Is.LessThan(0.00001f));
+            motion.Step(new CameraInput { Scroll = -0.75f }, 0.016f, settings);
+            Assert.That(motion.Distance, Is.EqualTo(25f).Within(0.0001f));
+            Assert.That(Vector3.Distance(motion.Position, originalPosition),
+                Is.EqualTo(expectedDepth - expectedDistance).Within(0.0001f));
+        }
+
+        [Test]
         public void WheelZoomReachesNearMinimumProgressivelyAndCanMoveAwayFromIt()
         {
             var settings = new CameraSettings { smoothing = 0f };
