@@ -50,7 +50,7 @@ namespace Aedifica.Tests.PlayMode
 
                 interaction.BeginPlacement(PieceType.Wall); // Same entry point used by the catalog button.
                 Assert.That(interaction.Placement.Active, Is.True);
-                camera.transform.LookAt(camera.transform.position + Vector3.up);
+                camera.transform.LookAt(camera.transform.position + Vector3.forward + Vector3.up);
                 Assert.That(interaction.Placement.UpdatePosition(pointer), Is.False,
                     "Sky without a reachable construction plane must not create a piece.");
                 Assert.That(lab.World.Count, Is.EqualTo(originalCount));
