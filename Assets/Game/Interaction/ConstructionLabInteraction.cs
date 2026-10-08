@@ -7,6 +7,13 @@ using UnityEngine.InputSystem;
 
 namespace Aedifica.Interaction
 {
+    public enum OpeningCommand
+    {
+        None, AddPassage, AddWindow, Next, Remove,
+        MoveLeft, MoveRight, MoveUp, MoveDown,
+        Narrow, Widen, Shorten, Heighten
+    }
+
     [DefaultExecutionOrder(-100)]
     [RequireComponent(typeof(ConstructionLabBlocks))]
     public sealed class ConstructionLabInteraction : MonoBehaviour
@@ -40,15 +47,25 @@ namespace Aedifica.Interaction
         private ManipulationSession session;
         private readonly SnapResolver geometricSnap = new SnapResolver();
         private PieceId? pressedPieceId;
+        private Guid? pressedOpeningId;
         private Guid? selectedOpeningId;
         public Guid? SelectedOpeningId => selectedOpeningId;
+        public string LastOpeningFeedback => openingFeedback;
         private PieceId? hudWallId;
         private Guid? hudOpeningId;
+        private WallOpening hudOpeningData;
+        private bool hudHasOpening;
         private int hudOpeningCount = -1;
         private string hudText;
+        private string openingFeedback;
+        private float openingFeedbackUntil;
         private Vector2 pressPosition;
         private bool draggingPan;
         private bool lastObservedLeftPressed;
+        private OpeningCommand repeatingOpeningCommand;
+        private float nextOpeningRepeatTime;
+        private const float OpeningRepeatDelay = 0.3f;
+        private const float OpeningRepeatInterval = 0.08f;
 
         private void Awake()
         {
@@ -95,20 +112,9 @@ namespace Aedifica.Interaction
                 if (keyboard.leftBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(-1);
                 if (keyboard.rightBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(1);
                 if (keyboard.homeKey.wasPressedThisFrame || keyboard.cKey.wasPressedThisFrame) FrameSelected();
-                if (keyboard.insertKey.wasPressedThisFrame)
-                    AddOpening(keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed
-                        ? WallOpeningKind.Window : WallOpeningKind.Passage);
-                if (keyboard.tabKey.wasPressedThisFrame) CycleOpening();
-                if (keyboard.deleteKey.wasPressedThisFrame) RemoveSelectedOpening();
-                if (keyboard.jKey.wasPressedThisFrame) MoveSelectedOpening(-0.1f, 0f);
-                if (keyboard.lKey.wasPressedThisFrame) MoveSelectedOpening(0.1f, 0f);
-                if (keyboard.iKey.wasPressedThisFrame) MoveSelectedOpening(0f, 0.1f);
-                if (keyboard.kKey.wasPressedThisFrame) MoveSelectedOpening(0f, -0.1f);
-                if (keyboard.uKey.wasPressedThisFrame) ResizeSelectedOpening(-0.1f, 0f);
-                if (keyboard.oKey.wasPressedThisFrame) ResizeSelectedOpening(0.1f, 0f);
-                if (keyboard.nKey.wasPressedThisFrame) ResizeSelectedOpening(0f, -0.1f);
-                if (keyboard.bKey.wasPressedThisFrame) ResizeSelectedOpening(0f, 0.1f);
+                ApplyOpeningCommand(ReadOpeningCommandWithRepeat(keyboard));
             }
+            else repeatingOpeningCommand = OpeningCommand.None;
 
             Mouse mouse = Mouse.current;
             if (mouse == null) return;
@@ -146,12 +152,15 @@ namespace Aedifica.Interaction
             pressPosition = pointer;
             draggingPan = false;
             pressedPieceId = null;
+            pressedOpeningId = null;
             PickResult picked = Pick(pointer);
             GizmoHandle nearestHandle = picked.Handle;
             PieceView nearestPiece = picked.View;
             float handleDistance = picked.HandleDistance;
             float pieceDistance = picked.ViewDistance;
+            bool openingUnderPointer = TryPickSelectedOpeningAt(pointer, out Guid openingId, out float openingDistance);
             if (nearestHandle != null && (nearestPiece == null || handleDistance <= pieceDistance) &&
+                (!openingUnderPointer || handleDistance <= openingDistance) &&
                 selection.SelectedPieceId is PieceId selectedId && lab.World.TryGet(selectedId, out PieceData selectedPiece))
             {
                 Vector3 axis = ManipulationSession.AxisVector(nearestHandle.Axis);
@@ -166,6 +175,7 @@ namespace Aedifica.Interaction
                 geometricSnap.Reset();
                 cityCamera.SetPanSuppressed(true);
             }
+            else if (openingUnderPointer && openingDistance < pieceDistance) pressedOpeningId = openingId;
             else if (nearestPiece != null) pressedPieceId = nearestPiece.Id;
             if (debugSelection) Debug.Log($"Selection PointerDown result: pressedPiece={pressedPieceId}, handle={nearestHandle}", this);
         }
@@ -223,9 +233,86 @@ namespace Aedifica.Interaction
 
         // P0.12.1 keyboard editing is scoped to a selected wall and never consumes
         // the existing camera, gizmo, material, or snap commands.
+        public static OpeningCommand ReadOpeningCommand(Keyboard keyboard)
+        {
+            if (keyboard == null) return OpeningCommand.None;
+            if (keyboard.insertKey.wasPressedThisFrame)
+                return keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed
+                    ? OpeningCommand.AddWindow : OpeningCommand.AddPassage;
+            if (keyboard.tabKey.wasPressedThisFrame) return OpeningCommand.Next;
+            if (keyboard.deleteKey.wasPressedThisFrame) return OpeningCommand.Remove;
+            if (keyboard.jKey.wasPressedThisFrame) return OpeningCommand.MoveLeft;
+            if (keyboard.lKey.wasPressedThisFrame) return OpeningCommand.MoveRight;
+            if (keyboard.iKey.wasPressedThisFrame) return OpeningCommand.MoveUp;
+            if (keyboard.kKey.wasPressedThisFrame) return OpeningCommand.MoveDown;
+            if (keyboard.uKey.wasPressedThisFrame) return OpeningCommand.Narrow;
+            if (keyboard.oKey.wasPressedThisFrame) return OpeningCommand.Widen;
+            if (keyboard.nKey.wasPressedThisFrame) return OpeningCommand.Shorten;
+            if (keyboard.bKey.wasPressedThisFrame) return OpeningCommand.Heighten;
+            return OpeningCommand.None;
+        }
+
+        private OpeningCommand ReadOpeningCommandWithRepeat(Keyboard keyboard)
+        {
+            OpeningCommand pressed = ReadOpeningCommand(keyboard);
+            if (pressed != OpeningCommand.None)
+            {
+                repeatingOpeningCommand = IsAdjustment(pressed) ? pressed : OpeningCommand.None;
+                nextOpeningRepeatTime = Time.unscaledTime + OpeningRepeatDelay;
+                return pressed;
+            }
+            if (repeatingOpeningCommand == OpeningCommand.None ||
+                !AdjustmentKeyHeld(keyboard, repeatingOpeningCommand))
+            {
+                repeatingOpeningCommand = OpeningCommand.None;
+                return OpeningCommand.None;
+            }
+            if (Time.unscaledTime < nextOpeningRepeatTime) return OpeningCommand.None;
+            nextOpeningRepeatTime = Time.unscaledTime + OpeningRepeatInterval;
+            return repeatingOpeningCommand;
+        }
+
+        private static bool IsAdjustment(OpeningCommand command) =>
+            command >= OpeningCommand.MoveLeft && command <= OpeningCommand.Heighten;
+
+        private static bool AdjustmentKeyHeld(Keyboard keyboard, OpeningCommand command)
+        {
+            switch (command)
+            {
+                case OpeningCommand.MoveLeft: return keyboard.jKey.isPressed;
+                case OpeningCommand.MoveRight: return keyboard.lKey.isPressed;
+                case OpeningCommand.MoveUp: return keyboard.iKey.isPressed;
+                case OpeningCommand.MoveDown: return keyboard.kKey.isPressed;
+                case OpeningCommand.Narrow: return keyboard.uKey.isPressed;
+                case OpeningCommand.Widen: return keyboard.oKey.isPressed;
+                case OpeningCommand.Shorten: return keyboard.nKey.isPressed;
+                case OpeningCommand.Heighten: return keyboard.bKey.isPressed;
+                default: return false;
+            }
+        }
+
+        private void ApplyOpeningCommand(OpeningCommand command)
+        {
+            switch (command)
+            {
+                case OpeningCommand.AddPassage: AddOpening(WallOpeningKind.Passage); break;
+                case OpeningCommand.AddWindow: AddOpening(WallOpeningKind.Window); break;
+                case OpeningCommand.Next: CycleOpening(); break;
+                case OpeningCommand.Remove: RemoveSelectedOpening(); break;
+                case OpeningCommand.MoveLeft: MoveSelectedOpening(-0.1f, 0f); break;
+                case OpeningCommand.MoveRight: MoveSelectedOpening(0.1f, 0f); break;
+                case OpeningCommand.MoveUp: MoveSelectedOpening(0f, 0.1f); break;
+                case OpeningCommand.MoveDown: MoveSelectedOpening(0f, -0.1f); break;
+                case OpeningCommand.Narrow: ResizeSelectedOpening(-0.1f, 0f); break;
+                case OpeningCommand.Widen: ResizeSelectedOpening(0.1f, 0f); break;
+                case OpeningCommand.Shorten: ResizeSelectedOpening(0f, -0.1f); break;
+                case OpeningCommand.Heighten: ResizeSelectedOpening(0f, 0.1f); break;
+            }
+        }
+
         public bool AddOpening(WallOpeningKind kind)
         {
-            if (!TryGetSelectedWall(out PieceData wall)) return false;
+            if (!RequireSelectedWall(out PieceData wall)) return false;
             float width = 1.2f;
             float height = kind == WallOpeningKind.Passage ? 2f : 1f;
             float bottom = kind == WallOpeningKind.Passage ? 0f : 1f;
@@ -244,20 +331,27 @@ namespace Aedifica.Interaction
                 if (!lab.Apply(changed)) return false;
                 selectedOpeningId = id;
                 Debug.Log($"Opening added: {kind} ({id})", this);
+                ShowOpeningFeedback($"{(kind == WallOpeningKind.Window ? "Janela" : "Passagem")} criada e selecionada.");
                 return true;
             }
-            Debug.LogWarning("No valid space for this opening in the selected wall.", this);
+            ShowOpeningFeedback("Sem espaço para este vão: são necessários 0,1 m de parede nas bordas e entre aberturas.", true);
             return false;
         }
 
         public bool CycleOpening()
         {
-            if (!TryGetSelectedWall(out PieceData wall) || wall.Openings.Count == 0) return false;
+            if (!RequireSelectedWall(out PieceData wall)) return false;
+            if (wall.Openings.Count == 0)
+            {
+                ShowOpeningFeedback("Esta parede não tem aberturas. Use Insert para criar uma.");
+                return false;
+            }
             int index = -1;
             for (int i = 0; i < wall.Openings.Count; i++)
                 if (wall.Openings[i].Id == selectedOpeningId) { index = i; break; }
             selectedOpeningId = wall.Openings[(index + 1) % wall.Openings.Count].Id;
             Debug.Log($"Opening selected: {selectedOpeningId}", this);
+            ShowOpeningFeedback($"Abertura {((index + 1) % wall.Openings.Count) + 1}/{wall.Openings.Count} selecionada.");
             return true;
         }
 
@@ -269,7 +363,7 @@ namespace Aedifica.Interaction
 
         private bool EditSelectedOpening(float horizontal, float vertical, float width, float height)
         {
-            if (!TryGetSelectedWall(out PieceData wall) || !TryGetActiveOpening(wall, out WallOpening opening)) return false;
+            if (!RequireSelectedWall(out PieceData wall) || !RequireActiveOpening(wall, out WallOpening opening)) return false;
             PieceData changed;
             try
             {
@@ -279,19 +373,52 @@ namespace Aedifica.Interaction
             }
             catch (ArgumentException)
             {
-                Debug.LogWarning("Opening edit rejected: wall bounds, minimum size, or separation would be violated.", this);
+                string reason = opening.Bottom + vertical < 0f ? "o vão já está no piso" :
+                    opening.Width + width < WallOpening.MinimumSize || opening.Height + height < WallOpening.MinimumSize
+                        ? "largura e altura mínimas são 0,2 m" :
+                    "mantenha 0,1 m de parede nas bordas e entre aberturas";
+                ShowOpeningFeedback($"Edição recusada: {reason}.", true);
                 return false;
             }
-            return lab.Apply(changed);
+            if (!lab.Apply(changed)) return false;
+            ShowOpeningFeedback("Abertura atualizada.");
+            return true;
         }
 
         public bool RemoveSelectedOpening()
         {
-            if (!TryGetSelectedWall(out PieceData wall) || !TryGetActiveOpening(wall, out WallOpening opening)) return false;
+            if (!RequireSelectedWall(out PieceData wall) || !RequireActiveOpening(wall, out WallOpening opening)) return false;
             if (!lab.Apply(wall.WithoutOpening(opening.Id))) return false;
             selectedOpeningId = null;
             Debug.Log($"Opening removed: {opening.Id}", this);
+            ShowOpeningFeedback("Abertura removida; parede restaurada nesta região.");
             return true;
+        }
+
+        private bool RequireSelectedWall(out PieceData wall)
+        {
+            if (TryGetSelectedWall(out wall)) return true;
+            if (selection.SelectedPieceId is PieceId id && lab.World.TryGet(id, out PieceData selected))
+                ShowOpeningFeedback($"Aberturas paramétricas funcionam apenas em Wall; peça atual: {selected.Type}.", true);
+            else ShowOpeningFeedback("Selecione uma Wall antes de editar aberturas.", true);
+            return false;
+        }
+
+        private bool RequireActiveOpening(PieceData wall, out WallOpening opening)
+        {
+            if (TryGetActiveOpening(wall, out opening)) return true;
+            ShowOpeningFeedback(wall.Openings.Count == 0
+                ? "Esta parede não tem aberturas. Use Insert para criar uma."
+                : "Nenhuma abertura ativa. Use Tab para selecionar uma.");
+            return false;
+        }
+
+        private void ShowOpeningFeedback(string message, bool warning = false)
+        {
+            bool shouldLog = warning && (openingFeedback != message || Time.unscaledTime > openingFeedbackUntil);
+            openingFeedback = message;
+            openingFeedbackUntil = Time.unscaledTime + 4f;
+            if (shouldLog) Debug.LogWarning(message, this);
         }
 
         private bool TryGetSelectedWall(out PieceData wall)
@@ -312,19 +439,81 @@ namespace Aedifica.Interaction
             return false;
         }
 
+        private bool TryPickSelectedOpeningAt(Vector2 pointer, out Guid openingId, out float openingDistance)
+        {
+            openingId = default;
+            openingDistance = float.MaxValue;
+            if (!TryGetSelectedWall(out PieceData wall) || wall.Openings.Count == 0) return false;
+            Vector3 normal = wall.Transform.Rotation * Vector3.forward;
+            var plane = new Plane(normal, wall.Transform.Position);
+            Ray ray = sceneCamera.ScreenPointToRay(pointer);
+            if (!plane.Raycast(ray, out float distance) ||
+                distance <= 0f || distance > 1000f) return false;
+            Vector3 worldPoint = ray.GetPoint(distance);
+            Vector3 local = Quaternion.Inverse(wall.Transform.Rotation) * (worldPoint - wall.Transform.Position);
+            float x = local.x + wall.Dimensions.X * 0.5f;
+            foreach (WallOpening opening in wall.Openings)
+                if (x > opening.Left && x < opening.Right && local.y > opening.Bottom && local.y < opening.Top)
+                {
+                    openingId = opening.Id;
+                    openingDistance = distance;
+                    return true;
+                }
+            return false;
+        }
+
         private void OnGUI()
         {
+            if (openingFeedback != null && Time.unscaledTime <= openingFeedbackUntil)
+                GUI.Label(new Rect(12f, 58f, 800f, 24f), openingFeedback);
             if (!TryGetSelectedWall(out PieceData wall)) return;
-            if (hudWallId != wall.Id || hudOpeningId != selectedOpeningId || hudOpeningCount != wall.Openings.Count)
+            bool hasActive = TryGetActiveOpening(wall, out WallOpening active);
+            if (hudWallId != wall.Id || hudOpeningId != selectedOpeningId || hudOpeningCount != wall.Openings.Count ||
+                hudHasOpening != hasActive || hasActive && !hudOpeningData.Equals(active))
             {
                 hudWallId = wall.Id;
                 hudOpeningId = selectedOpeningId;
                 hudOpeningCount = wall.Openings.Count;
-                string current = selectedOpeningId is Guid id ? id.ToString("N").Substring(0, 8) : "none";
-                hudText = $"Wall openings: {wall.Openings.Count} | active: {current} | Insert passage, Shift+Insert window, Tab select, Delete remove\n" +
-                    "J/L horizontal, I/K vertical, U/O width, N/B height (0.1 m per keypress)";
+                hudHasOpening = hasActive;
+                hudOpeningData = active;
+                string current = hasActive
+                    ? $"{active.Kind} x={active.Left:F1} y={active.Bottom:F1} w={active.Width:F1} h={active.Height:F1} m"
+                    : "nenhuma";
+                hudText = $"Wall: {wall.Openings.Count} aberturas | ativa: {current} | Insert passagem, Shift+Insert janela, Tab próxima, Delete remover\n" +
+                    "J/L horizontal, I/K vertical, U/O largura, N/B altura (0,1 m por toque)";
             }
             GUI.Label(new Rect(12f, 12f, 800f, 45f), hudText);
+            if (hasActive) DrawActiveOpeningOutline(wall, active);
+        }
+
+        private void DrawActiveOpeningOutline(PieceData wall, WallOpening opening)
+        {
+            float nearSide = Vector3.Dot(sceneCamera.transform.position - wall.Transform.Position,
+                wall.Transform.Rotation * Vector3.forward) >= 0f ? 1f : -1f;
+            float z = nearSide * wall.Dimensions.Z * 0.5f;
+            float left = opening.Left - wall.Dimensions.X * 0.5f;
+            float right = opening.Right - wall.Dimensions.X * 0.5f;
+            Vector3 a = sceneCamera.WorldToScreenPoint(wall.Transform.Position +
+                wall.Transform.Rotation * new Vector3(left, opening.Bottom, z));
+            Vector3 b = sceneCamera.WorldToScreenPoint(wall.Transform.Position +
+                wall.Transform.Rotation * new Vector3(right, opening.Bottom, z));
+            Vector3 c = sceneCamera.WorldToScreenPoint(wall.Transform.Position +
+                wall.Transform.Rotation * new Vector3(right, opening.Top, z));
+            Vector3 d = sceneCamera.WorldToScreenPoint(wall.Transform.Position +
+                wall.Transform.Rotation * new Vector3(left, opening.Top, z));
+            if (a.z <= 0f || b.z <= 0f || c.z <= 0f || d.z <= 0f) return;
+            float x0 = Mathf.Min(Mathf.Min(a.x, b.x), Mathf.Min(c.x, d.x));
+            float x1 = Mathf.Max(Mathf.Max(a.x, b.x), Mathf.Max(c.x, d.x));
+            float y0 = Screen.height - Mathf.Max(Mathf.Max(a.y, b.y), Mathf.Max(c.y, d.y));
+            float y1 = Screen.height - Mathf.Min(Mathf.Min(a.y, b.y), Mathf.Min(c.y, d.y));
+            if (x1 <= x0 || y1 <= y0) return;
+            Color previous = GUI.color;
+            GUI.color = Color.cyan;
+            GUI.DrawTexture(new Rect(x0, y0, x1 - x0, 2f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x0, y1 - 2f, x1 - x0, 2f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x0, y0, 2f, y1 - y0), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(x1 - 2f, y0, 2f, y1 - y0), Texture2D.whiteTexture);
+            GUI.color = previous;
         }
 
         public bool TryPickPieceAt(Vector2 pointer, out PieceId id)
@@ -426,6 +615,12 @@ namespace Aedifica.Interaction
             bool isClick = IsClick(pressPosition, pointer);
             if (debugSelection) Debug.Log($"Selection PointerUp: start={pressPosition}, end={pointer}, click={isClick}, pressedPiece={pressedPieceId}", this);
             if (!isClick) return;
+            if (pressedOpeningId is Guid openingId && pressedPieceId == null)
+            {
+                selectedOpeningId = openingId;
+                ShowOpeningFeedback("Abertura selecionada. Use J/L, I/K, U/O e N/B para editar.");
+                return;
+            }
             PieceId? next = pressedPieceId;
             PieceId? old = selection.SelectedPieceId;
             if (old != next) selectedOpeningId = null;
@@ -443,11 +638,19 @@ namespace Aedifica.Interaction
             }
         }
 
-        private void OnDisable() => EndManipulation();
+        private void OnDisable()
+        {
+            repeatingOpeningCommand = OpeningCommand.None;
+            EndManipulation();
+        }
 
         private void OnApplicationFocus(bool focused)
         {
-            if (!focused) EndManipulation();
+            if (!focused)
+            {
+                repeatingOpeningCommand = OpeningCommand.None;
+                EndManipulation();
+            }
         }
 
         private void EndManipulation()

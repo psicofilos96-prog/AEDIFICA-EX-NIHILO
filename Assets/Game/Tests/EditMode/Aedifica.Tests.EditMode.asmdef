@@ -6,7 +6,8 @@
     "Aedifica.Interaction",
     "Aedifica.Construction",
     "Aedifica.Geometry",
-    "Aedifica.Rendering"
+    "Aedifica.Rendering",
+    "Unity.InputSystem"
   ],
   "includePlatforms": [
     "Editor"

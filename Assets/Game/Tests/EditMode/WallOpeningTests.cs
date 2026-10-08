@@ -5,6 +5,8 @@ using Aedifica.Geometry;
 using Aedifica.Interaction;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
 namespace Aedifica.Tests.EditMode
 {
@@ -21,6 +23,52 @@ namespace Aedifica.Tests.EditMode
 
         private static WallOpening Window() => new WallOpening(Guid.Parse("22222222-2222-2222-2222-222222222222"),
             WallId, WallOpeningKind.Window, 3.5f, 1f, 1.2f, 1f);
+
+        [TestCase(Key.Insert, OpeningCommand.AddPassage)]
+        [TestCase(Key.Tab, OpeningCommand.Next)]
+        [TestCase(Key.Delete, OpeningCommand.Remove)]
+        [TestCase(Key.J, OpeningCommand.MoveLeft)]
+        [TestCase(Key.L, OpeningCommand.MoveRight)]
+        [TestCase(Key.I, OpeningCommand.MoveUp)]
+        [TestCase(Key.K, OpeningCommand.MoveDown)]
+        [TestCase(Key.U, OpeningCommand.Narrow)]
+        [TestCase(Key.O, OpeningCommand.Widen)]
+        [TestCase(Key.N, OpeningCommand.Shorten)]
+        [TestCase(Key.B, OpeningCommand.Heighten)]
+        [TestCase(Key.W, OpeningCommand.None)]
+        [TestCase(Key.R, OpeningCommand.None)]
+        [TestCase(Key.F, OpeningCommand.None)]
+        public void PhysicalKeyboardKeysMapToOpeningCommands(Key key, OpeningCommand expected)
+        {
+            Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+            try
+            {
+                keyboard.MakeCurrent();
+                Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(OpeningCommand.None));
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(key));
+                InputSystem.Update();
+                Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(expected));
+            }
+            finally { InputSystem.RemoveDevice(keyboard); }
+        }
+
+        [Test]
+        public void ShiftInsertMapsToWindowOnEitherShiftKey()
+        {
+            foreach (Key shift in new[] { Key.LeftShift, Key.RightShift })
+            {
+                Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+                try
+                {
+                    keyboard.MakeCurrent();
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState(shift, Key.Insert));
+                    InputSystem.Update();
+                    Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard),
+                        Is.EqualTo(OpeningCommand.AddWindow));
+                }
+                finally { InputSystem.RemoveDevice(keyboard); }
+            }
+        }
 
         [Test]
         public void SolidWallUsesOriginalGeometry()

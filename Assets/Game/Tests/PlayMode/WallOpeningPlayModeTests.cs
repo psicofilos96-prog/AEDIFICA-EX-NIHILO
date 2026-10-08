@@ -39,6 +39,18 @@ namespace Aedifica.Tests.PlayMode
                 keyboard.MakeCurrent();
                 mouse = InputSystem.AddDevice<Mouse>();
                 mouse.MakeCurrent();
+                var update = typeof(ConstructionLabInteraction).GetMethod("Update",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                Assert.That(update, Is.Not.Null);
+                void Press(params Key[] keys)
+                {
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState(keys));
+                    InputSystem.Update();
+                    Assert.That(Keyboard.current, Is.SameAs(keyboard));
+                    update.Invoke(interaction, null);
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                    InputSystem.Update();
+                }
                 PieceId wallId = PieceId.Parse("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
                 Assert.That(lab.World.TryGet(wallId, out PieceData wall), Is.True);
                 Assert.That(lab.TryGetView(wallId, out PieceView view), Is.True);
@@ -87,37 +99,68 @@ namespace Aedifica.Tests.PlayMode
                 Assert.That(lab.Apply(wall), Is.True);
                 Assert.That(collider.sharedMesh, Is.SameAs(meshBeforePose));
 
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.L));
-                yield return null;
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
-                yield return null;
+                Press(Key.J);
+                Assert.That(lab.World.TryGet(wallId, out wall), Is.True);
+                Assert.That(wall.Openings[0].Left, Is.EqualTo(3.3f).Within(0.0001f));
+                Press(Key.L);
+                Press(Key.I);
+                Assert.That(lab.World.TryGet(wallId, out wall), Is.True);
+                Assert.That(wall.Openings[0].Bottom, Is.EqualTo(0.1f).Within(0.0001f));
+                Press(Key.K);
+                Press(Key.K); // The second descent is rejected at the floor, with feedback.
+                Assert.That(interaction.LastOpeningFeedback, Does.Contain("piso"));
+                Press(Key.U);
+                Assert.That(lab.World.TryGet(wallId, out wall), Is.True);
+                Assert.That(wall.Openings[0].Width, Is.EqualTo(1.1f).Within(0.0001f));
+                Press(Key.O);
+                Press(Key.N);
+                Assert.That(lab.World.TryGet(wallId, out wall), Is.True);
+                Assert.That(wall.Openings[0].Height, Is.EqualTo(1.9f).Within(0.0001f));
+                Press(Key.B);
+                Press(Key.L);
                 Assert.That(lab.World.TryGet(wallId, out wall), Is.True);
                 Assert.That(wall.Openings[0].Left, Is.EqualTo(3.5f).Within(0.0001f));
+                Assert.That(wall.Openings[0].Bottom, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(wall.Openings[0].Height, Is.EqualTo(2f).Within(0.0001f));
                 Assert.That(interaction.SelectedPieceId, Is.EqualTo(wallId));
                 Assert.That(interaction.SelectedOpeningId, Is.EqualTo(wall.Openings[0].Id));
                 Mesh beforeResize = collider.sharedMesh;
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.O));
-                yield return null;
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
-                yield return null;
+                Press(Key.O);
                 Assert.That(lab.World.TryGet(wallId, out wall), Is.True);
                 Assert.That(wall.Openings[0].Width, Is.EqualTo(1.3f).Within(0.0001f));
                 Assert.That(collider.sharedMesh, Is.Not.SameAs(beforeResize));
 
-                Assert.That(interaction.AddOpening(WallOpeningKind.Window), Is.True);
+                Press(Key.LeftShift, Key.Insert);
                 Assert.That(lab.World.TryGet(wallId, out wall), Is.True);
                 Assert.That(wall.Openings.Count, Is.EqualTo(2));
                 Assert.That(interaction.SelectedOpeningId, Is.EqualTo(wall.Openings[1].Id));
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Tab));
-                yield return null;
+                float windowLeftBeforeHold = wall.Openings[1].Left;
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.L));
+                yield return new WaitForSecondsRealtime(0.55f);
                 InputSystem.QueueStateEvent(keyboard, new KeyboardState());
                 yield return null;
+                Assert.That(lab.World.TryGet(wallId, out wall), Is.True);
+                Assert.That(wall.Openings[1].Left, Is.GreaterThan(windowLeftBeforeHold + 0.15f),
+                    "Holding L must repeat after the first precise 0.1 m step.");
+                WallOpening window = wall.Openings[1];
+                Vector3 windowCenter = wall.Transform.Position + wall.Transform.Rotation *
+                    new Vector3(window.Left + window.Width * 0.5f - wall.Dimensions.X * 0.5f,
+                        window.Bottom + window.Height * 0.5f, 0f);
+                camera.transform.position = windowCenter + wall.Transform.Rotation * Vector3.back * 8f;
+                camera.transform.LookAt(windowCenter);
+                screen = camera.WorldToScreenPoint(windowCenter);
+                pointer = new Vector2(screen.x, screen.y);
+                interaction.PointerDown(pointer);
+                interaction.PointerUp(pointer);
+                Assert.That(interaction.SelectedPieceId, Is.EqualTo(wallId),
+                    "Clicking an empty opening must keep its host wall selected.");
+                Assert.That(interaction.SelectedOpeningId, Is.EqualTo(window.Id));
+                Assert.That(interaction.LastOpeningFeedback, Does.Contain("Abertura selecionada"));
+                yield return null;
+                Press(Key.Tab);
                 Assert.That(interaction.SelectedOpeningId, Is.EqualTo(wall.Openings[0].Id));
 
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Delete));
-                yield return null;
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
-                yield return null;
+                Press(Key.Delete);
                 Assert.That(lab.World.TryGet(wallId, out wall), Is.True);
                 Assert.That(wall.Openings.Count, Is.EqualTo(1));
                 Assert.That(wall.Openings[0].Kind, Is.EqualTo(WallOpeningKind.Window));
@@ -129,6 +172,21 @@ namespace Aedifica.Tests.PlayMode
                 Assert.That(collider.enabled, Is.False);
                 Physics.SyncTransforms();
                 Assert.That(HitsWall(view, wall, 0.8f, 1f), Is.True);
+
+                PieceId blockId = PieceId.Parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+                Assert.That(lab.World.TryGet(blockId, out PieceData block), Is.True);
+                Vector3 blockCenter = block.Transform.Position + Vector3.up * 0.5f;
+                camera.transform.position = blockCenter + Vector3.back * 8f;
+                camera.transform.LookAt(blockCenter);
+                screen = camera.WorldToScreenPoint(blockCenter);
+                pointer = new Vector2(screen.x, screen.y);
+                interaction.PointerDown(pointer);
+                interaction.PointerUp(pointer);
+                Assert.That(interaction.SelectedPieceId, Is.EqualTo(blockId));
+                Press(Key.Insert);
+                Assert.That(interaction.LastOpeningFeedback, Does.Contain("apenas em Wall"));
+                Assert.That(lab.World.TryGet(blockId, out block), Is.True);
+                Assert.That(block.Openings, Is.Empty);
             }
             finally
             {
