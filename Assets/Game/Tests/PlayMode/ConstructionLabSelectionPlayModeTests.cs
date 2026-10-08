@@ -111,6 +111,102 @@ namespace Aedifica.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator ScrollApproachesRearDomeAndFrontWallWithoutSelection()
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.That(shader, Is.Not.Null);
+            var material = new Material(shader);
+            var cameraObject = new GameObject("Cursor zoom camera");
+            var labObject = new GameObject("Cursor zoom lab");
+            labObject.SetActive(false);
+            Mouse testMouse = null;
+            try
+            {
+                var camera = cameraObject.AddComponent<UnityEngine.Camera>();
+                camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
+                var controller = cameraObject.AddComponent<CityBuilderCamera>();
+                var lab = labObject.AddComponent<ConstructionLabBlocks>();
+                var interaction = labObject.AddComponent<ConstructionLabInteraction>();
+                lab.ConfigureMaterial(material);
+                interaction.Configure(camera, controller);
+                labObject.SetActive(true);
+                yield return null;
+                testMouse = InputSystem.AddDevice<Mouse>();
+                testMouse.MakeCurrent();
+
+                foreach (string idText in new[] { "50000000000000000000000000000003", "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" })
+                {
+                    PieceId id = PieceId.Parse(idText);
+                    Assert.That(lab.TryGetView(id, out PieceView view), Is.True);
+                    Bounds bounds = view.GetComponent<MeshRenderer>().bounds;
+                    Assert.That(interaction.SelectedPieceId, Is.Null);
+                    Assert.That(controller.FrameBounds(bounds), Is.True);
+                    yield return new WaitForSecondsRealtime(0.6f);
+                    Vector3 screen = camera.WorldToScreenPoint(bounds.center);
+                    Vector2 pointer = new Vector2(screen.x, screen.y);
+                    Physics.SyncTransforms();
+                    Assert.That(Physics.Raycast(camera.ScreenPointToRay(pointer), out RaycastHit hit, 1000f), Is.True,
+                        $"Expected a cursor target for {idText}.");
+                    float before = Vector3.Distance(camera.transform.position, hit.point);
+                    for (int i = 0; i < 8; i++)
+                    {
+                        InputSystem.QueueStateEvent(testMouse, new MouseState { position = pointer, scroll = Vector2.up });
+                        yield return null;
+                        InputSystem.QueueStateEvent(testMouse, new MouseState { position = pointer });
+                        yield return null;
+                    }
+                    yield return new WaitForSecondsRealtime(0.4f);
+                    float after = Vector3.Distance(camera.transform.position, hit.point);
+                    Assert.That(after, Is.LessThan(before * 0.5f), $"Cursor zoom did not approach {idText}.");
+                    Assert.That(interaction.SelectedPieceId, Is.Null);
+                    Assert.That(float.IsNaN(camera.transform.position.x), Is.False);
+                    InputSystem.QueueStateEvent(testMouse, new MouseState { position = pointer, scroll = Vector2.down });
+                    yield return null;
+                    InputSystem.QueueStateEvent(testMouse, new MouseState { position = pointer });
+                    yield return new WaitForSecondsRealtime(0.2f);
+                }
+            }
+            finally
+            {
+                if (testMouse != null) InputSystem.RemoveDevice(testMouse);
+                Object.DestroyImmediate(labObject);
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(material);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator ScrollOnEmptyConstructionPlaneRemainsBounded()
+        {
+            var cameraObject = new GameObject("Empty zoom test camera");
+            Mouse testMouse = null;
+            try
+            {
+                var camera = cameraObject.AddComponent<UnityEngine.Camera>();
+                camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
+                cameraObject.AddComponent<CityBuilderCamera>();
+                testMouse = InputSystem.AddDevice<Mouse>();
+                testMouse.MakeCurrent();
+                yield return null;
+                var pointer = new Vector2(400f, 300f);
+                Assert.That(Physics.Raycast(camera.ScreenPointToRay(pointer), 1000f), Is.False);
+                Vector3 before = camera.transform.position;
+                InputSystem.QueueStateEvent(testMouse, new MouseState { position = pointer, scroll = Vector2.up });
+                yield return null;
+                InputSystem.QueueStateEvent(testMouse, new MouseState { position = pointer });
+                yield return new WaitForSecondsRealtime(0.3f);
+                Assert.That(Vector3.Distance(before, camera.transform.position), Is.GreaterThan(0.1f));
+                Assert.That(Vector3.Distance(before, camera.transform.position), Is.LessThan(20f));
+                Assert.That(float.IsNaN(camera.transform.position.x), Is.False);
+            }
+            finally
+            {
+                if (testMouse != null) InputSystem.RemoveDevice(testMouse);
+                Object.DestroyImmediate(cameraObject);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator ControllerPicksAndSelectsRuntimeBlockThroughCameraRayAndCollider()
         {
             Shader shader = Shader.Find("Universal Render Pipeline/Lit");

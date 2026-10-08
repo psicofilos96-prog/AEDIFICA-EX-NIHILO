@@ -52,6 +52,61 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
+        public void CursorZoomReachesDistantSurfaceEvenAtMinimumOrbitRadius()
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 0.5f, settings);
+            Vector3 surface = new Vector3(4f, 1f, 20f);
+            Vector3 direction = (surface - motion.Position).normalized;
+            float before = Vector3.Distance(motion.Position, surface);
+            float yaw = motion.Yaw;
+            float pitch = motion.Pitch;
+            for (int i = 0; i < 25; i++)
+            {
+                Assert.That(motion.ZoomToward(surface, direction, 0.75f, 0.3f, i != 0, settings), Is.True);
+                motion.Step(default, 0.016f, settings);
+                Assert.That(motion.Distance, Is.EqualTo(settings.zoomMinDistance).Within(0.00001f));
+                Assert.That(motion.Yaw, Is.EqualTo(yaw));
+                Assert.That(motion.Pitch, Is.EqualTo(pitch));
+            }
+            Assert.That(Vector3.Distance(motion.Position, surface), Is.LessThan(1f));
+            Assert.That(Vector3.Distance(motion.Position, surface), Is.LessThan(before * 0.05f));
+        }
+
+        [Test]
+        public void CursorZoomPreservesScreenPointAndSupportsTargetSwitchAndZoomOut()
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+            var cameraObject = new GameObject("Cursor zoom projection test");
+            try
+            {
+                var camera = cameraObject.AddComponent<UnityEngine.Camera>();
+                camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
+                camera.fieldOfView = 60f;
+                foreach (Vector3 point in new[] { new Vector3(-3f, 0f, 8f), new Vector3(5f, 1f, 15f) })
+                {
+                    camera.transform.SetPositionAndRotation(motion.Position, motion.Rotation);
+                    Vector3 before = camera.WorldToViewportPoint(point);
+                    Vector3 direction = (point - motion.Position).normalized;
+                    float range = Vector3.Distance(motion.Position, point);
+                    Assert.That(motion.ZoomToward(point, direction, 0.75f, camera.nearClipPlane, false, settings), Is.True);
+                    motion.Step(default, 0.016f, settings);
+                    camera.transform.SetPositionAndRotation(motion.Position, motion.Rotation);
+                    Vector3 after = camera.WorldToViewportPoint(point);
+                    Assert.That(after.x, Is.EqualTo(before.x).Within(0.0001f));
+                    Assert.That(after.y, Is.EqualTo(before.y).Within(0.0001f));
+                    Assert.That(Vector3.Distance(motion.Position, point), Is.LessThan(range));
+                }
+                float distance = motion.Distance;
+                motion.Step(new CameraInput { Scroll = -0.75f }, 0.016f, settings);
+                Assert.That(motion.Distance, Is.GreaterThan(distance));
+                Assert.That(motion.ZoomToward(Vector3.positiveInfinity, Vector3.forward, 0.75f, 0.3f, false, settings), Is.False);
+            }
+            finally { Object.DestroyImmediate(cameraObject); }
+        }
+
+        [Test]
         public void RightDragRotatesWithoutPanning()
         {
             var input = new CameraInput();

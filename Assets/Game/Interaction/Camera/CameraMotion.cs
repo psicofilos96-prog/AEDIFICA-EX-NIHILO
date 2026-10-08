@@ -72,6 +72,41 @@ namespace Aedifica.Interaction.Camera
 
         private static float Safe(float value) => float.IsNaN(value) || float.IsInfinity(value) ? 0f : value;
 
+        // Move the camera along the cursor ray while preserving its orientation.
+        // Distance remains an orbital radius; at its minimum, Focus can still
+        // advance toward the pointed surface. The near-plane clearance prevents
+        // crossing the surface or reversing the direction of travel.
+        public bool ZoomToward(Vector3 point, Vector3 rayDirection, float scroll, float nearClip,
+            bool continueTarget, CameraSettings settings)
+        {
+            if (IsOrbiting || scroll <= 0f || float.IsNaN(scroll) || float.IsInfinity(scroll) ||
+                !Finite(point) || !Finite(rayDirection) || rayDirection.sqrMagnitude < 0.5f) return false;
+            settings.Normalize();
+            Vector3 direction = rayDirection.normalized;
+            Quaternion rotation = Quaternion.Euler(continueTarget ? targetPitch : Pitch,
+                continueTarget ? targetYaw : Yaw, 0f);
+            float sourceDistance = continueTarget ? targetDistance : Distance;
+            Vector3 sourcePosition = (continueTarget ? targetFocus : Focus) - rotation * Vector3.forward * sourceDistance;
+            float depth = Vector3.Dot(point - sourcePosition, direction);
+            float clearance = Mathf.Max(0.05f, Safe(nearClip) + 0.1f);
+            if (!Finite(sourcePosition) || float.IsNaN(depth) || float.IsInfinity(depth)) return false;
+            if (depth <= clearance) return true; // Consume inward scroll without crossing the surface.
+            float factor = Mathf.Exp(-scroll * settings.zoomSpeed);
+            float nextDepth = clearance + (depth - clearance) * factor;
+            float nextDistance = Mathf.Clamp(sourceDistance * factor, settings.zoomMinDistance, settings.zoomMaxDistance);
+            Vector3 nextPosition = point - direction * nextDepth;
+            Vector3 nextFocus = nextPosition + rotation * Vector3.forward * nextDistance;
+            if (!Finite(nextFocus)) return false;
+            targetFocus = nextFocus;
+            targetDistance = nextDistance;
+            return true;
+        }
+
+        private static bool Finite(Vector3 value) =>
+            !float.IsNaN(value.x) && !float.IsInfinity(value.x) &&
+            !float.IsNaN(value.y) && !float.IsInfinity(value.y) &&
+            !float.IsNaN(value.z) && !float.IsInfinity(value.z);
+
         public static float MoveSpeed(float distance, CameraSettings settings)
         {
             float range = Mathf.Max(0.0001f, settings.zoomMaxDistance - settings.zoomMinDistance);

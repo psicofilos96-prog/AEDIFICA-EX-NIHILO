@@ -12,17 +12,17 @@ namespace Aedifica.Interaction.Camera
         [SerializeField] private float initialYaw = 0f;
         [SerializeField] private float initialPitch = 45f;
         [SerializeField] private float initialDistance = 25f;
-        [SerializeField] private bool debugOrbit;
-        [SerializeField] private bool debugHome;
 
         private CameraMotion motion;
         private bool panSuppressed;
         private bool panActive;
         private bool wasOrbiting;
-        private bool homeFirstStepPending;
-        private bool homeFinalStepPending;
-        private float homeFinalStepTime;
-        private bool homeOverwriteReported;
+        private UnityEngine.Camera sceneCamera;
+        private readonly RaycastHit[] zoomHits = new RaycastHit[128];
+        private Collider previousZoomCollider;
+        private Vector3 previousZoomPoint;
+        private bool previousZoomWasPlane;
+        private bool hasPreviousZoomTarget;
 
         public void SetPanSuppressed(bool suppressed) => panSuppressed = suppressed;
 
@@ -39,22 +39,9 @@ namespace Aedifica.Interaction.Camera
         public bool FrameBounds(Bounds bounds)
         {
             bool rightPressed = Mouse.current != null && Mouse.current.rightButton.isPressed;
-            if (motion == null || panActive || motion.IsOrbiting || rightPressed)
-            {
-                if (debugHome) Debug.LogWarning($"Home camera rejected: frame={Time.frameCount}, motionReady={motion != null}, panActive={panActive}, orbitActive={motion != null && motion.IsOrbiting}, rightPressed={rightPressed}, cursorLock={Cursor.lockState}", this);
-                return false;
-            }
-            UnityEngine.Camera sceneCamera = GetComponent<UnityEngine.Camera>();
-            if (debugHome) Debug.Log($"Home camera before: frame={Time.frameCount}, camera={sceneCamera.name}#{sceneCamera.GetEntityId()}, cameraEnabled={sceneCamera.enabled}, mainCamera={(UnityEngine.Camera.main != null ? UnityEngine.Camera.main.GetEntityId().ToString() : "none")}, focus={motion.Focus.ToString("F4")}, distance={motion.Distance:R}, targetFocus={motion.TargetFocus.ToString("F4")}, targetDistance={motion.TargetDistance:R}, position={transform.position.ToString("F4")}, boundsCenter={bounds.center.ToString("F4")}, boundsSize={bounds.size.ToString("F4")}", this);
+            if (motion == null || panActive || motion.IsOrbiting || rightPressed) return false;
+            hasPreviousZoomTarget = false;
             motion.FrameBounds(bounds, sceneCamera.fieldOfView, sceneCamera.aspect, sceneCamera.nearClipPlane, settings);
-            if (debugHome)
-            {
-                Debug.Log($"Home camera target: frame={Time.frameCount}, focus={motion.Focus.ToString("F4")}, distance={motion.Distance:R}, targetFocus={motion.TargetFocus.ToString("F4")}, targetDistance={motion.TargetDistance:R}, fov={sceneCamera.fieldOfView:R}, aspect={sceneCamera.aspect:R}, nearClip={sceneCamera.nearClipPlane:R}", this);
-                homeFirstStepPending = true;
-                homeFinalStepPending = true;
-                homeFinalStepTime = Time.unscaledTime + 0.5f;
-                homeOverwriteReported = false;
-            }
             return true;
         }
 
@@ -63,6 +50,7 @@ namespace Aedifica.Interaction.Camera
         private void Awake()
         {
             settings ??= new CameraSettings();
+            sceneCamera = GetComponent<UnityEngine.Camera>();
             motion = new CameraMotion(initialFocus, initialYaw, initialPitch, initialDistance, settings);
             ApplyTransform();
         }
@@ -70,7 +58,7 @@ namespace Aedifica.Interaction.Camera
         private void OnDisable()
         {
             EndPan();
-            if (motion != null) EndOrbitWithDiagnostics("OnDisable");
+            if (motion != null) motion.EndOrbit();
             wasOrbiting = false;
             CameraInputReader.ReleaseRotationCapture();
         }
@@ -80,7 +68,7 @@ namespace Aedifica.Interaction.Camera
             if (!focused)
             {
                 EndPan();
-                if (motion != null) EndOrbitWithDiagnostics("FocusLost");
+                if (motion != null) motion.EndOrbit();
                 wasOrbiting = false;
                 CameraInputReader.ReleaseRotationCapture();
             }
@@ -88,24 +76,15 @@ namespace Aedifica.Interaction.Camera
 
         private void Update()
         {
-            if (debugHome && homeFinalStepPending && !homeOverwriteReported &&
-                Vector3.Distance(transform.position, motion.Position) > 0.01f)
-            {
-                Debug.LogWarning($"Home transform overwritten before camera Update: frame={Time.frameCount}, transformPosition={transform.position.ToString("F4")}, motionPosition={motion.Position.ToString("F4")}", this);
-                homeOverwriteReported = true;
-            }
-            CameraInput input = CameraInputReader.Read(out float rawScroll, out CameraScrollRegime scrollRegime);
+            CameraInput input = CameraInputReader.Read();
             bool orbiting = Mouse.current != null && Mouse.current.rightButton.isPressed;
             if (orbiting && !wasOrbiting)
             {
+                hasPreviousZoomTarget = false;
                 EndPan();
-                float distanceBefore = motion.Distance;
-                Vector3 focusBefore = motion.Focus;
                 motion.BeginOrbit();
-                if (debugOrbit)
-                    Debug.Log($"Orbit begin transition: frame={Time.frameCount}, distanceBefore={distanceBefore:R}, distanceAfter={motion.Distance:R}, focusBefore={focusBefore.ToString("F6")}, focusAfter={motion.Focus.ToString("F6")}, cameraPosition={motion.Position.ToString("F6")}", this);
             }
-            if (!orbiting && wasOrbiting) EndOrbitWithDiagnostics("RmbReleased");
+            if (!orbiting && wasOrbiting) motion.EndOrbit();
             wasOrbiting = orbiting;
             if (!panActive || panSuppressed || orbiting || Cursor.lockState == CursorLockMode.Locked)
                 input.PanPixels = Vector2.zero;
@@ -115,36 +94,64 @@ namespace Aedifica.Interaction.Camera
                 input.KeyboardYaw = 0f;
                 input.Scroll = 0f;
             }
-            Vector3 previousPosition = motion.Position;
-            float distanceBeforeStep = motion.Distance;
-            float consumedScroll = input.Scroll;
+            if (input.Move != Vector2.zero || input.PanPixels != Vector2.zero ||
+                input.RotatePixels != Vector2.zero || input.KeyboardYaw != 0f || input.Scroll < 0f)
+                hasPreviousZoomTarget = false;
+            if (!orbiting && input.Scroll > 0f && TryZoomToCursor(input.Scroll))
+                input.Scroll = 0f;
             motion.Step(input, Time.unscaledDeltaTime, settings);
-            if (debugOrbit && motion.Distance != distanceBeforeStep)
-            {
-                string cause = consumedScroll != 0f && !motion.IsOrbiting ? "ZoomInput" :
-                    motion.IsOrbiting ? "OrbitStep" : "ZoomSmoothing";
-                Debug.Log($"Distance change: frame={Time.frameCount}, cause={cause}, rawScroll={rawScroll:R}, processedScroll={consumedScroll:R}, scrollRegime={scrollRegime}, distanceBefore={distanceBeforeStep:R}, distanceAfter={motion.Distance:R}, rmbPressed={orbiting}, orbitActive={motion.IsOrbiting}, cursorLock={Cursor.lockState}", this);
-            }
-            if (debugOrbit && orbiting && input.RotatePixels != Vector2.zero)
-                Debug.Log($"Orbit drag: mouseDelta={input.RotatePixels}, yaw={motion.Yaw:F2}, pitch={motion.Pitch:F2}, distance={motion.Distance:F3}, cameraDisplacement={Vector3.Distance(previousPosition, motion.Position):F3}", this);
             ApplyTransform();
-            if (debugHome && homeFirstStepPending)
-            {
-                Debug.Log($"Home first step: frame={Time.frameCount}, focus={motion.Focus.ToString("F4")}, distance={motion.Distance:R}, targetFocus={motion.TargetFocus.ToString("F4")}, targetDistance={motion.TargetDistance:R}, position={transform.position.ToString("F4")}", this);
-                homeFirstStepPending = false;
-            }
-            if (debugHome && homeFinalStepPending && Time.unscaledTime >= homeFinalStepTime)
-            {
-                Debug.Log($"Home after 0.5s: frame={Time.frameCount}, focus={motion.Focus.ToString("F4")}, distance={motion.Distance:R}, targetFocus={motion.TargetFocus.ToString("F4")}, targetDistance={motion.TargetDistance:R}, position={transform.position.ToString("F4")}", this);
-                homeFinalStepPending = false;
-            }
         }
 
-        private void EndOrbitWithDiagnostics(string reason)
+        private bool TryZoomToCursor(float scroll)
         {
-            if (debugOrbit && motion.IsOrbiting)
-                Debug.Log($"Orbit end: frame={Time.frameCount}, reason={reason}, distance={motion.Distance:R}, focus={motion.Focus.ToString("F6")}, cameraPosition={motion.Position.ToString("F6")}, yaw={motion.Yaw:R}, pitch={motion.Pitch:R}", this);
-            motion.EndOrbit();
+            Mouse mouse = Mouse.current;
+            if (mouse == null || Cursor.lockState == CursorLockMode.Locked) return false;
+            Vector2 pointer = mouse.position.ReadValue();
+            if (!sceneCamera.pixelRect.Contains(pointer)) return false;
+            Physics.SyncTransforms();
+            Ray ray = sceneCamera.ScreenPointToRay(pointer);
+            float maxRayDistance = Mathf.Min(sceneCamera.farClipPlane, 1000f);
+            int count = Physics.RaycastNonAlloc(ray, zoomHits, maxRayDistance, ~0, QueryTriggerInteraction.Ignore);
+            // NonAlloc may return a full, unordered buffer. Resolve overflow
+            // exceptionally with the complete hit list so the nearest surface wins.
+            RaycastHit[] hits = count == zoomHits.Length
+                ? Physics.RaycastAll(ray, maxRayDistance, ~0, QueryTriggerInteraction.Ignore)
+                : zoomHits;
+            if (count == zoomHits.Length) count = hits.Length;
+            Collider nearest = null;
+            Vector3 point = default;
+            float nearestDistance = float.PositiveInfinity;
+            for (int i = 0; i < count; i++)
+            {
+                Collider collider = hits[i].collider;
+                if (collider == null || collider.GetComponent<Aedifica.Interaction.GizmoHandle>() != null) continue;
+                if (hits[i].distance >= nearestDistance) continue;
+                nearest = collider;
+                nearestDistance = hits[i].distance;
+                point = hits[i].point;
+            }
+            // The empty construction plane is useful only when its intersection
+            // is nearby; a nearly horizontal ray must never launch Focus away.
+            bool plane = nearest == null;
+            if (plane)
+            {
+                var ground = new Plane(Vector3.up, Vector3.zero);
+                float limit = Mathf.Min(maxRayDistance, Mathf.Max(10f, motion.Distance * 4f));
+                if (!ground.Raycast(ray, out float planeDistance) || planeDistance <= 0f || planeDistance > limit)
+                    return false; // Keep the existing orbital zoom for sky.
+                point = ray.GetPoint(planeDistance);
+            }
+            bool sameTarget = hasPreviousZoomTarget && previousZoomWasPlane == plane &&
+                previousZoomCollider == nearest &&
+                Vector3.Distance(previousZoomPoint, point) <= Mathf.Max(0.25f, motion.Distance * 0.02f);
+            if (!motion.ZoomToward(point, ray.direction, scroll, sceneCamera.nearClipPlane, sameTarget, settings))
+                return false;
+            hasPreviousZoomTarget = true;
+            previousZoomWasPlane = plane;
+            previousZoomCollider = nearest;
+            previousZoomPoint = point;
+            return true;
         }
 
         private void ApplyTransform()
