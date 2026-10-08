@@ -64,7 +64,7 @@ namespace Aedifica.Interaction
             gizmo = gizmoObject.AddComponent<RuntimeGizmo>();
             gizmo.Initialize(sceneCamera, lab.SharedBlockMaterial);
             if (debugSelection) Debug.Log($"Selection Start: pieces={lab.World.Count}, mouse={(Mouse.current != null ? Mouse.current.name : "none")}", this);
-            if (debugHome) Debug.Log($"Home ready: frame={Time.frameCount}, interactionEnabled={enabled}, camera={sceneCamera.name}#{sceneCamera.GetInstanceID()}, controller={cityCamera.name}#{cityCamera.GetInstanceID()}, keyboard={(Keyboard.current != null ? Keyboard.current.displayName : "none")}", this);
+            if (debugHome) Debug.Log($"Home ready: frame={Time.frameCount}, interactionEnabled={enabled}, camera={sceneCamera.name}#{sceneCamera.GetEntityId()}, controller={cityCamera.name}#{cityCamera.GetEntityId()}, keyboard={(Keyboard.current != null ? Keyboard.current.displayName : "none")}", this);
         }
 
         private void Update()
@@ -225,7 +225,7 @@ namespace Aedifica.Interaction
                 return false;
             }
             Bounds bounds = view.GetComponent<MeshRenderer>().bounds;
-            if (debugHome) Debug.Log($"Home selection: frame={Time.frameCount}, piece={id}, boundsCenter={bounds.center.ToString("F4")}, boundsSize={bounds.size.ToString("F4")}, sceneCamera={sceneCamera.name}#{sceneCamera.GetInstanceID()}, controller={cityCamera.name}#{cityCamera.GetInstanceID()}", this);
+            if (debugHome) Debug.Log($"Home selection: frame={Time.frameCount}, piece={id}, boundsCenter={bounds.center.ToString("F4")}, boundsSize={bounds.size.ToString("F4")}, sceneCamera={sceneCamera.name}#{sceneCamera.GetEntityId()}, controller={cityCamera.name}#{cityCamera.GetEntityId()}", this);
             bool accepted = cityCamera.FrameBounds(bounds);
             if (debugHome) Debug.Log($"Home selection result: frame={Time.frameCount}, accepted={accepted}, piece={id}", this);
             return accepted;

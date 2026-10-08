@@ -45,7 +45,7 @@ namespace Aedifica.Interaction.Camera
                 return false;
             }
             UnityEngine.Camera sceneCamera = GetComponent<UnityEngine.Camera>();
-            if (debugHome) Debug.Log($"Home camera before: frame={Time.frameCount}, camera={sceneCamera.name}#{sceneCamera.GetInstanceID()}, cameraEnabled={sceneCamera.enabled}, mainCamera={(UnityEngine.Camera.main != null ? UnityEngine.Camera.main.GetInstanceID().ToString() : "none")}, focus={motion.Focus.ToString("F4")}, distance={motion.Distance:R}, targetFocus={motion.TargetFocus.ToString("F4")}, targetDistance={motion.TargetDistance:R}, position={transform.position.ToString("F4")}, boundsCenter={bounds.center.ToString("F4")}, boundsSize={bounds.size.ToString("F4")}", this);
+            if (debugHome) Debug.Log($"Home camera before: frame={Time.frameCount}, camera={sceneCamera.name}#{sceneCamera.GetEntityId()}, cameraEnabled={sceneCamera.enabled}, mainCamera={(UnityEngine.Camera.main != null ? UnityEngine.Camera.main.GetEntityId().ToString() : "none")}, focus={motion.Focus.ToString("F4")}, distance={motion.Distance:R}, targetFocus={motion.TargetFocus.ToString("F4")}, targetDistance={motion.TargetDistance:R}, position={transform.position.ToString("F4")}, boundsCenter={bounds.center.ToString("F4")}, boundsSize={bounds.size.ToString("F4")}", this);
             motion.FrameBounds(bounds, sceneCamera.fieldOfView, sceneCamera.aspect, sceneCamera.nearClipPlane, settings);
             if (debugHome)
             {
