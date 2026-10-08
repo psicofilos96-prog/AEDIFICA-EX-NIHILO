@@ -252,6 +252,66 @@ namespace Aedifica.Tests.EditMode
         }
 
         [Test]
+        public void ZoomTowardUnchangedFocusMovesRearDomeOutOfView()
+        {
+            var cameraObject = new GameObject("Rear dome projection test");
+            try
+            {
+                var camera = cameraObject.AddComponent<UnityEngine.Camera>();
+                camera.fieldOfView = 60f;
+                camera.aspect = 16f / 9f;
+                var settings = new CameraSettings { smoothing = 0f, moveSpeedMin = 8f };
+                var motion = new CameraMotion(Vector3.zero, 0f, 45f, 25f, settings);
+                var domeCenter = new Vector3(12f, 1.25f, 27f);
+                camera.transform.SetPositionAndRotation(motion.Position, motion.Rotation);
+                Vector3 initiallyProjected = camera.WorldToViewportPoint(domeCenter);
+                Assert.That(initiallyProjected.z, Is.GreaterThan(0f));
+                Assert.That(initiallyProjected.y, Is.InRange(0f, 1f));
+
+                float wheelStep = CameraScrollProcessor.Process(1f, out _);
+                for (int i = 0; i < 20; i++)
+                    motion.Step(new CameraInput { Scroll = wheelStep }, 0.016f, settings);
+                camera.transform.SetPositionAndRotation(motion.Position, motion.Rotation);
+                Vector3 projectedAfterZoom = camera.WorldToViewportPoint(domeCenter);
+                Assert.That(motion.Focus, Is.EqualTo(Vector3.zero));
+                Assert.That(motion.Distance, Is.EqualTo(0.5f));
+                Assert.That(projectedAfterZoom.y, Is.GreaterThan(1f), "The distant dome leaves the vertical field of view when only Distance changes.");
+            }
+            finally { Object.DestroyImmediate(cameraObject); }
+        }
+
+        [TestCase(0f, 15f)]
+        [TestCase(45f, 45f)]
+        [TestCase(90f, 80f)]
+        public void WasdCanReachRearDomeButMinimumZoomCannotFrameItsCenter(float yaw, float pitch)
+        {
+            var settings = new CameraSettings { smoothing = 0f, moveSpeedMin = 8f };
+            var motion = new CameraMotion(Vector3.zero, yaw, pitch, 3f, settings);
+            var domeGround = new Vector3(12f, 0f, 27f);
+            var worldDirection = new Vector2(domeGround.x, domeGround.z).normalized;
+            float radians = yaw * Mathf.Deg2Rad;
+            var inputDirection = new Vector2(
+                worldDirection.x * Mathf.Cos(radians) - worldDirection.y * Mathf.Sin(radians),
+                worldDirection.x * Mathf.Sin(radians) + worldDirection.y * Mathf.Cos(radians));
+            float travelSeconds = new Vector2(domeGround.x, domeGround.z).magnitude / CameraMotion.MoveSpeed(3f, settings);
+            motion.Step(new CameraInput { Move = inputDirection }, travelSeconds, settings);
+            Assert.That(Vector3.Distance(motion.Focus, domeGround), Is.LessThan(0.001f));
+            Assert.That(Vector3.Distance(motion.Position, domeGround), Is.EqualTo(3f).Within(0.001f));
+
+            var domeCenter = new Vector3(12f, 1.25f, 27f);
+            Vector3 localAtThreeMeters = Quaternion.Inverse(motion.Rotation) * (domeCenter - motion.Position);
+            Assert.That(localAtThreeMeters.z, Is.GreaterThan(0f));
+            float wheelStep = CameraScrollProcessor.Process(1f, out _);
+            for (int i = 0; i < 12; i++)
+                motion.Step(new CameraInput { Scroll = wheelStep }, 0.016f, settings);
+            Assert.That(motion.Distance, Is.EqualTo(0.5f));
+            Vector3 localAtMinimum = Quaternion.Inverse(motion.Rotation) * (domeCenter - motion.Position);
+            float verticalAngle = Mathf.Atan2(localAtMinimum.y, localAtMinimum.z) * Mathf.Rad2Deg;
+            Assert.That(localAtMinimum.z <= 0f || Mathf.Abs(verticalAngle) > 30f, Is.True,
+                "At ground-level Focus, the dome center cannot remain visible at minimum Distance.");
+        }
+
+        [Test]
         public void WasdAndKeyboardYawPreservePitchAndDistance()
         {
             var settings = new CameraSettings { smoothing = 0f };
