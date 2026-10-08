@@ -19,6 +19,7 @@ namespace Aedifica.Interaction
         [SerializeField] private UnityEngine.Camera sceneCamera;
         [SerializeField] private CityBuilderCamera cityCamera;
         [SerializeField] private bool debugSelection;
+        [SerializeField] private bool debugHome;
         [SerializeField] private SnapSettings snapSettings = new SnapSettings();
 
         public PieceId? SelectedPieceId => selection.SelectedPieceId;
@@ -43,6 +44,7 @@ namespace Aedifica.Interaction
         private Vector2 pressPosition;
         private bool draggingPan;
         private bool lastObservedLeftPressed;
+        private bool lastObservedHomePressed;
 
         private void Awake()
         {
@@ -62,11 +64,26 @@ namespace Aedifica.Interaction
             gizmo = gizmoObject.AddComponent<RuntimeGizmo>();
             gizmo.Initialize(sceneCamera, lab.SharedBlockMaterial);
             if (debugSelection) Debug.Log($"Selection Start: pieces={lab.World.Count}, mouse={(Mouse.current != null ? Mouse.current.name : "none")}", this);
+            if (debugHome) Debug.Log($"Home ready: frame={Time.frameCount}, interactionEnabled={enabled}, camera={sceneCamera.name}#{sceneCamera.GetInstanceID()}, controller={cityCamera.name}#{cityCamera.GetInstanceID()}, keyboard={(Keyboard.current != null ? Keyboard.current.displayName : "none")}", this);
         }
 
         private void Update()
         {
             Keyboard keyboard = Keyboard.current;
+            if (debugHome && keyboard != null)
+            {
+                bool homePressed = keyboard.homeKey.isPressed;
+                if (keyboard.anyKey.wasPressedThisFrame || homePressed != lastObservedHomePressed)
+                {
+                    string pressedKeys = "";
+                    foreach (var key in keyboard.allKeys)
+                        if (key.wasPressedThisFrame) pressedKeys += (pressedKeys.Length == 0 ? "" : ",") + key.displayName;
+                    Debug.Log($"Home input: frame={Time.frameCount}, keys={pressedKeys}, homePressed={homePressed}, homeDown={keyboard.homeKey.wasPressedThisFrame}, selected={(selection.SelectedPieceId?.ToString() ?? "none")}, sessionActive={session != null}, keyboard={keyboard.displayName}, applicationFocused={Application.isFocused}", this);
+                }
+                lastObservedHomePressed = homePressed;
+            }
+            if (debugHome && keyboard != null && keyboard.homeKey.wasPressedThisFrame && session != null)
+                Debug.Log("Home ignored: manipulation session is active.", this);
             if (keyboard != null && session == null)
             {
                 if (keyboard.digit1Key.wasPressedThisFrame || keyboard.numpad1Key.wasPressedThisFrame) mode = ManipulationMode.Move;
@@ -197,8 +214,21 @@ namespace Aedifica.Interaction
 
         public bool FrameSelected()
         {
-            if (!(selection.SelectedPieceId is PieceId id) || !lab.TryGetView(id, out PieceView view)) return false;
-            return cityCamera.FrameBounds(view.GetComponent<MeshRenderer>().bounds);
+            if (!(selection.SelectedPieceId is PieceId id))
+            {
+                if (debugHome) Debug.Log("Home ignored: no selected piece.", this);
+                return false;
+            }
+            if (!lab.TryGetView(id, out PieceView view))
+            {
+                if (debugHome) Debug.LogWarning($"Home ignored: selected piece {id} has no PieceView.", this);
+                return false;
+            }
+            Bounds bounds = view.GetComponent<MeshRenderer>().bounds;
+            if (debugHome) Debug.Log($"Home selection: frame={Time.frameCount}, piece={id}, boundsCenter={bounds.center.ToString("F4")}, boundsSize={bounds.size.ToString("F4")}, sceneCamera={sceneCamera.name}#{sceneCamera.GetInstanceID()}, controller={cityCamera.name}#{cityCamera.GetInstanceID()}", this);
+            bool accepted = cityCamera.FrameBounds(bounds);
+            if (debugHome) Debug.Log($"Home selection result: frame={Time.frameCount}, accepted={accepted}, piece={id}", this);
+            return accepted;
         }
 
         public bool TryPickPieceAt(Vector2 pointer, out PieceId id)

@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Reflection;
 using Aedifica.Construction;
 using Aedifica.Interaction;
 using Aedifica.Interaction.Camera;
@@ -41,21 +40,12 @@ namespace Aedifica.Tests.PlayMode
                 testMouse = InputSystem.AddDevice<Mouse>();
                 testKeyboard.MakeCurrent();
                 testMouse.MakeCurrent();
-                MethodInfo update = typeof(ConstructionLabInteraction).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance);
-                Assert.That(update, Is.Not.Null);
-                void PressHome()
-                {
-                    InputSystem.QueueStateEvent(testKeyboard, new KeyboardState(Key.Home));
-                    InputSystem.Update();
-                    update.Invoke(interaction, null);
-                    InputSystem.QueueStateEvent(testKeyboard, new KeyboardState());
-                    InputSystem.Update();
-                }
-
                 Vector3 originalPosition = camera.transform.position;
-                PressHome();
+                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState(Key.Home));
                 yield return null;
                 Assert.That(camera.transform.position, Is.EqualTo(originalPosition), "Home without selection must leave the camera unchanged.");
+                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState());
+                yield return null;
 
                 PieceId domeId = PieceId.Parse("50000000000000000000000000000003");
                 Assert.That(lab.TryGetView(domeId, out PieceView dome), Is.True);
@@ -70,7 +60,9 @@ namespace Aedifica.Tests.PlayMode
                 interaction.PointerUp(pointer);
                 Assert.That(interaction.SelectedPieceId, Is.EqualTo(domeId));
 
-                PressHome();
+                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState(Key.Home));
+                yield return null; // Exercise Input System and both MonoBehaviour.Update methods in their real order.
+                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState());
                 yield return new WaitForSecondsRealtime(0.6f);
                 Vector3 centerOnScreen = camera.WorldToViewportPoint(bounds.center);
                 Assert.That(centerOnScreen.x, Is.EqualTo(0.5f).Within(0.01f));

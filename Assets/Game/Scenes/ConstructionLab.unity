@@ -288,6 +288,7 @@ MonoBehaviour:
   initialYaw: 0
   initialPitch: 45
   initialDistance: 25
+  debugHome: 1
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -852,6 +853,7 @@ MonoBehaviour:
   sceneCamera: {fileID: 330585545}
   cityCamera: {fileID: 330585548}
   debugSelection: 0
+  debugHome: 1
   snapSettings:
     PositionSnapEnabled: 0
     RotationSnapEnabled: 0

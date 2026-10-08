@@ -43,6 +43,8 @@ namespace Aedifica.Tests.EditMode
                 Assert.That(settings.FindPropertyRelative("orbitPitchSensitivity").floatValue, Is.EqualTo(0.18f).Within(0.000001f));
                 Assert.That(settings.FindPropertyRelative("invertHorizontal").boolValue, Is.False);
                 Assert.That(settings.FindPropertyRelative("invertVertical").boolValue, Is.False);
+                Assert.That(cameraObject.FindProperty("debugHome").boolValue, Is.True,
+                    "The diagnostic ConstructionLab must log Home transitions for local reproduction.");
                 Assert.That(new CameraSettings().moveSpeedMin, Is.EqualTo(3f));
                 Assert.That(new CameraSettings().zoomMinDistance, Is.EqualTo(0.5f));
                 Assert.That(new CameraSettings().orbitYawSensitivity, Is.EqualTo(0.18f));
@@ -51,6 +53,7 @@ namespace Aedifica.Tests.EditMode
                 var interaction = new SerializedObject(interactions[0]);
                 Assert.That(interaction.FindProperty("sceneCamera").objectReferenceValue, Is.SameAs(sceneCamera));
                 Assert.That(interaction.FindProperty("cityCamera").objectReferenceValue, Is.SameAs(controller));
+                Assert.That(interaction.FindProperty("debugHome").boolValue, Is.True);
             }
             finally
             {

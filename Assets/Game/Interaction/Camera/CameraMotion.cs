@@ -9,6 +9,8 @@ namespace Aedifica.Interaction.Camera
         public float Pitch { get; private set; }
         public float Distance { get; private set; }
         public bool IsOrbiting { get; private set; }
+        internal Vector3 TargetFocus => targetFocus;
+        internal float TargetDistance => targetDistance;
 
         private Vector3 targetFocus;
         private float targetYaw;
