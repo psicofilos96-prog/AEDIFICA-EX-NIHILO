@@ -10,7 +10,7 @@ using UnityEngine.InputSystem.LowLevel;
 
 namespace Aedifica.Tests.EditMode
 {
-    public sealed class WallOpeningTests
+    public sealed class WallOpeningTests : InputTestFixture
     {
         private static readonly PieceId WallId = PieceId.Parse("1234567890abcdef1234567890abcdef");
 
@@ -41,15 +41,13 @@ namespace Aedifica.Tests.EditMode
         public void PhysicalKeyboardKeysMapToOpeningCommands(Key key, OpeningCommand expected)
         {
             Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
-            try
-            {
-                keyboard.MakeCurrent();
-                Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(OpeningCommand.None));
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState(key));
-                InputSystem.Update();
-                Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(expected));
-            }
-            finally { InputSystem.RemoveDevice(keyboard); }
+            keyboard.MakeCurrent();
+            Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(OpeningCommand.None));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(key));
+            InputSystem.Update();
+            Assert.That(keyboard[key].isPressed, Is.True);
+            Assert.That(keyboard[key].wasPressedThisFrame, Is.True);
+            Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(expected));
         }
 
         [Test]
@@ -58,16 +56,35 @@ namespace Aedifica.Tests.EditMode
             foreach (Key shift in new[] { Key.LeftShift, Key.RightShift })
             {
                 Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
-                try
-                {
-                    keyboard.MakeCurrent();
-                    InputSystem.QueueStateEvent(keyboard, new KeyboardState(shift, Key.Insert));
-                    InputSystem.Update();
-                    Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard),
-                        Is.EqualTo(OpeningCommand.AddWindow));
-                }
-                finally { InputSystem.RemoveDevice(keyboard); }
+                keyboard.MakeCurrent();
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(shift, Key.Insert));
+                InputSystem.Update();
+                Assert.That(keyboard[shift].isPressed, Is.True);
+                Assert.That(keyboard.insertKey.wasPressedThisFrame, Is.True);
+                Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard),
+                    Is.EqualTo(OpeningCommand.AddWindow));
+                InputSystem.RemoveDevice(keyboard);
             }
+        }
+
+        [Test]
+        public void HeldKeyOnlyTriggersOnPressAndTriggersAgainAfterRelease()
+        {
+            Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+            keyboard.MakeCurrent();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Tab));
+            InputSystem.Update();
+            Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(OpeningCommand.Next));
+
+            InputSystem.Update();
+            Assert.That(keyboard.tabKey.isPressed, Is.True);
+            Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(OpeningCommand.None));
+
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            InputSystem.Update();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Tab));
+            InputSystem.Update();
+            Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(OpeningCommand.Next));
         }
 
         [Test]

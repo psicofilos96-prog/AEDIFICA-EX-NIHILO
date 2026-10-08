@@ -7,7 +7,8 @@
     "Aedifica.Construction",
     "Aedifica.Geometry",
     "Aedifica.Rendering",
-    "Unity.InputSystem"
+    "Unity.InputSystem",
+    "Unity.InputSystem.TestFramework"
   ],
   "includePlatforms": [
     "Editor"
