@@ -96,6 +96,26 @@ namespace Aedifica.Rendering
 
         public bool TryGetView(PieceId id, out PieceView view) => views.TryGetValue(id, out view);
 
+        public bool Add(PieceData piece)
+        {
+            if (piece == null || !world.Add(piece)) return false;
+            var viewObject = new GameObject($"Lab {piece.Type} {piece.Id}");
+            viewObject.transform.SetParent(transform, false);
+            try
+            {
+                PieceView view = viewObject.AddComponent<PieceView>();
+                view.Initialize(piece, Registry);
+                views.Add(piece.Id, view);
+                return true;
+            }
+            catch
+            {
+                world.Remove(piece.Id);
+                Destroy(viewObject);
+                throw;
+            }
+        }
+
         public bool Apply(PieceData replacement)
         {
             if (replacement == null || !world.Replace(replacement.Id, replacement)) return false;

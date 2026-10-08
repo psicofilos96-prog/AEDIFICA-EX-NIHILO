@@ -5,7 +5,8 @@
     "Aedifica.Core",
     "Unity.InputSystem",
     "Aedifica.Construction",
-    "Aedifica.Rendering"
+    "Aedifica.Rendering",
+    "Aedifica.Geometry"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

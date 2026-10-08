@@ -46,6 +46,8 @@ namespace Aedifica.Interaction
         private ResizeMode resizeMode;
         private ManipulationSession session;
         private readonly SnapResolver geometricSnap = new SnapResolver();
+        private FreePiecePlacement placement;
+        public FreePiecePlacement Placement => placement;
         private PieceId? pressedPieceId;
         private Guid? pressedOpeningId;
         private Guid? selectedOpeningId;
@@ -76,6 +78,7 @@ namespace Aedifica.Interaction
             if (cityCamera == null) throw new InvalidOperationException("ConstructionLabInteraction.cityCamera is not assigned.");
             if (cityCamera.GetComponent<UnityEngine.Camera>() != sceneCamera)
                 throw new InvalidOperationException("ConstructionLabInteraction cameras must refer to the same Camera GameObject.");
+            placement = new FreePiecePlacement(lab, sceneCamera, snapSettings);
             if (debugSelection) Debug.Log($"Selection Awake: lab={lab.name}, camera={sceneCamera.name}, cityCamera={cityCamera.name}", this);
         }
 
@@ -90,6 +93,35 @@ namespace Aedifica.Interaction
         private void Update()
         {
             Keyboard keyboard = Keyboard.current;
+            if (placement.Active)
+            {
+                if (keyboard != null)
+                {
+                    if (keyboard.escapeKey.wasPressedThisFrame) { placement.Cancel(); cityCamera.SetPanSuppressed(false); return; }
+                    if (keyboard.zKey.wasPressedThisFrame) placement.Rotate(-1);
+                    if (keyboard.xKey.wasPressedThisFrame) placement.Rotate(1);
+                    if (keyboard.gKey.wasPressedThisFrame) TogglePositionSnap();
+                    if (keyboard.rKey.wasPressedThisFrame) ToggleRotationSnap();
+                    if (keyboard.tKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Surface);
+                    if (keyboard.hKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Edge);
+                    if (keyboard.pKey.wasPressedThisFrame) ToggleGeometricSnap(GeometricSnapKind.Endpoint);
+                    if (keyboard.homeKey.wasPressedThisFrame || keyboard.cKey.wasPressedThisFrame) FrameSelected();
+                }
+                Mouse placementMouse = Mouse.current;
+                if (placementMouse != null && !placementMouse.rightButton.isPressed &&
+                    Cursor.lockState != CursorLockMode.Locked)
+                {
+                    Vector2 placementPointer = placementMouse.position.ReadValue();
+                    if (!placement.IsToolbarPoint(placementPointer))
+                    {
+                        placement.UpdatePosition(placementPointer);
+                        if (placementMouse.leftButton.wasPressedThisFrame && placement.Confirm(out PieceData created))
+                            SelectCreatedPiece(created.Id);
+                    }
+                }
+                if (gizmo != null) gizmo.Hide();
+                return;
+            }
             if (keyboard != null && session == null)
             {
                 if (keyboard.digit1Key.wasPressedThisFrame || keyboard.numpad1Key.wasPressedThisFrame) mode = ManipulationMode.Move;
@@ -464,6 +496,7 @@ namespace Aedifica.Interaction
 
         private void OnGUI()
         {
+            placement?.DrawGUI(BeginPlacement);
             if (openingFeedback != null && Time.unscaledTime <= openingFeedbackUntil)
                 GUI.Label(new Rect(12f, 58f, 800f, 24f), openingFeedback);
             if (!TryGetSelectedWall(out PieceData wall)) return;
@@ -640,6 +673,8 @@ namespace Aedifica.Interaction
 
         private void OnDisable()
         {
+            placement?.Cancel();
+            if (cityCamera != null) cityCamera.SetPanSuppressed(false);
             repeatingOpeningCommand = OpeningCommand.None;
             EndManipulation();
         }
@@ -666,7 +701,25 @@ namespace Aedifica.Interaction
 
         private void OnDestroy()
         {
+            placement?.Cancel();
             if (gizmo != null) Destroy(gizmo.gameObject);
+        }
+
+        private void SelectCreatedPiece(PieceId id)
+        {
+            if (selection.SelectedPieceId is PieceId oldId && lab.TryGetView(oldId, out PieceView oldView))
+                oldView.SetSelected(false);
+            selection.Select(id);
+            selectedOpeningId = null;
+            if (lab.TryGetView(id, out PieceView view)) view.SetSelected(true);
+        }
+
+        public void BeginPlacement(PieceType type)
+        {
+            if (session != null) EndManipulation();
+            cityCamera.EndPan();
+            cityCamera.SetPanSuppressed(true);
+            placement.Begin(type);
         }
     }
 }
