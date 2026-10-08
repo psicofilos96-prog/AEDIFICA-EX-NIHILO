@@ -10,6 +10,8 @@ namespace Aedifica.Rendering
         {
             if (geometry == null) throw new ArgumentNullException(nameof(geometry));
             var mesh = new Mesh { name = "Parametric Block" };
+            if (geometry.Vertices.Length > 65535)
+                mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             mesh.vertices = geometry.Vertices;
             mesh.triangles = geometry.Triangles;
             mesh.normals = geometry.Normals;

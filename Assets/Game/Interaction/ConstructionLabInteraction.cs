@@ -40,6 +40,12 @@ namespace Aedifica.Interaction
         private ManipulationSession session;
         private readonly SnapResolver geometricSnap = new SnapResolver();
         private PieceId? pressedPieceId;
+        private Guid? selectedOpeningId;
+        public Guid? SelectedOpeningId => selectedOpeningId;
+        private PieceId? hudWallId;
+        private Guid? hudOpeningId;
+        private int hudOpeningCount = -1;
+        private string hudText;
         private Vector2 pressPosition;
         private bool draggingPan;
         private bool lastObservedLeftPressed;
@@ -89,6 +95,19 @@ namespace Aedifica.Interaction
                 if (keyboard.leftBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(-1);
                 if (keyboard.rightBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(1);
                 if (keyboard.homeKey.wasPressedThisFrame || keyboard.cKey.wasPressedThisFrame) FrameSelected();
+                if (keyboard.insertKey.wasPressedThisFrame)
+                    AddOpening(keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed
+                        ? WallOpeningKind.Window : WallOpeningKind.Passage);
+                if (keyboard.tabKey.wasPressedThisFrame) CycleOpening();
+                if (keyboard.deleteKey.wasPressedThisFrame) RemoveSelectedOpening();
+                if (keyboard.jKey.wasPressedThisFrame) MoveSelectedOpening(-0.1f, 0f);
+                if (keyboard.lKey.wasPressedThisFrame) MoveSelectedOpening(0.1f, 0f);
+                if (keyboard.iKey.wasPressedThisFrame) MoveSelectedOpening(0f, 0.1f);
+                if (keyboard.kKey.wasPressedThisFrame) MoveSelectedOpening(0f, -0.1f);
+                if (keyboard.uKey.wasPressedThisFrame) ResizeSelectedOpening(-0.1f, 0f);
+                if (keyboard.oKey.wasPressedThisFrame) ResizeSelectedOpening(0.1f, 0f);
+                if (keyboard.nKey.wasPressedThisFrame) ResizeSelectedOpening(0f, -0.1f);
+                if (keyboard.bKey.wasPressedThisFrame) ResizeSelectedOpening(0f, 0.1f);
             }
 
             Mouse mouse = Mouse.current;
@@ -202,6 +221,112 @@ namespace Aedifica.Interaction
             return cityCamera.FrameBounds(bounds);
         }
 
+        // P0.12.1 keyboard editing is scoped to a selected wall and never consumes
+        // the existing camera, gizmo, material, or snap commands.
+        public bool AddOpening(WallOpeningKind kind)
+        {
+            if (!TryGetSelectedWall(out PieceData wall)) return false;
+            float width = 1.2f;
+            float height = kind == WallOpeningKind.Passage ? 2f : 1f;
+            float bottom = kind == WallOpeningKind.Passage ? 0f : 1f;
+            Guid id = Guid.NewGuid();
+            float centeredLeft = (wall.Dimensions.X - width) * 0.5f;
+            int slots = Mathf.Max(0, Mathf.CeilToInt((wall.Dimensions.X - width - WallOpening.MinimumSolid - 0.2f) * 10f));
+            for (int slot = -1; slot <= slots; slot++)
+            {
+                float left = slot < 0 ? centeredLeft : 0.2f + slot * 0.1f;
+                PieceData changed;
+                try
+                {
+                    changed = wall.WithOpening(new WallOpening(id, wall.Id, kind, left, bottom, width, height));
+                }
+                catch (ArgumentException) { continue; }
+                if (!lab.Apply(changed)) return false;
+                selectedOpeningId = id;
+                Debug.Log($"Opening added: {kind} ({id})", this);
+                return true;
+            }
+            Debug.LogWarning("No valid space for this opening in the selected wall.", this);
+            return false;
+        }
+
+        public bool CycleOpening()
+        {
+            if (!TryGetSelectedWall(out PieceData wall) || wall.Openings.Count == 0) return false;
+            int index = -1;
+            for (int i = 0; i < wall.Openings.Count; i++)
+                if (wall.Openings[i].Id == selectedOpeningId) { index = i; break; }
+            selectedOpeningId = wall.Openings[(index + 1) % wall.Openings.Count].Id;
+            Debug.Log($"Opening selected: {selectedOpeningId}", this);
+            return true;
+        }
+
+        public bool MoveSelectedOpening(float horizontal, float vertical) =>
+            EditSelectedOpening(horizontal, vertical, 0f, 0f);
+
+        public bool ResizeSelectedOpening(float width, float height) =>
+            EditSelectedOpening(0f, 0f, width, height);
+
+        private bool EditSelectedOpening(float horizontal, float vertical, float width, float height)
+        {
+            if (!TryGetSelectedWall(out PieceData wall) || !TryGetActiveOpening(wall, out WallOpening opening)) return false;
+            PieceData changed;
+            try
+            {
+                WallOpening edited = opening.WithRect(opening.Left + horizontal, opening.Bottom + vertical,
+                    opening.Width + width, opening.Height + height);
+                changed = wall.ReplaceOpening(edited);
+            }
+            catch (ArgumentException)
+            {
+                Debug.LogWarning("Opening edit rejected: wall bounds, minimum size, or separation would be violated.", this);
+                return false;
+            }
+            return lab.Apply(changed);
+        }
+
+        public bool RemoveSelectedOpening()
+        {
+            if (!TryGetSelectedWall(out PieceData wall) || !TryGetActiveOpening(wall, out WallOpening opening)) return false;
+            if (!lab.Apply(wall.WithoutOpening(opening.Id))) return false;
+            selectedOpeningId = null;
+            Debug.Log($"Opening removed: {opening.Id}", this);
+            return true;
+        }
+
+        private bool TryGetSelectedWall(out PieceData wall)
+        {
+            wall = null;
+            return selection.SelectedPieceId is PieceId id && lab.World.TryGet(id, out wall) && wall.Type == PieceType.Wall;
+        }
+
+        private bool TryGetActiveOpening(PieceData wall, out WallOpening opening)
+        {
+            foreach (WallOpening candidate in wall.Openings)
+                if (candidate.Id == selectedOpeningId)
+                {
+                    opening = candidate;
+                    return true;
+                }
+            opening = default;
+            return false;
+        }
+
+        private void OnGUI()
+        {
+            if (!TryGetSelectedWall(out PieceData wall)) return;
+            if (hudWallId != wall.Id || hudOpeningId != selectedOpeningId || hudOpeningCount != wall.Openings.Count)
+            {
+                hudWallId = wall.Id;
+                hudOpeningId = selectedOpeningId;
+                hudOpeningCount = wall.Openings.Count;
+                string current = selectedOpeningId is Guid id ? id.ToString("N").Substring(0, 8) : "none";
+                hudText = $"Wall openings: {wall.Openings.Count} | active: {current} | Insert passage, Shift+Insert window, Tab select, Delete remove\n" +
+                    "J/L horizontal, I/K vertical, U/O width, N/B height (0.1 m per keypress)";
+            }
+            GUI.Label(new Rect(12f, 12f, 800f, 45f), hudText);
+        }
+
         public bool TryPickPieceAt(Vector2 pointer, out PieceId id)
         {
             PieceView view = Pick(pointer).View;
@@ -303,6 +428,7 @@ namespace Aedifica.Interaction
             if (!isClick) return;
             PieceId? next = pressedPieceId;
             PieceId? old = selection.SelectedPieceId;
+            if (old != next) selectedOpeningId = null;
             if (old is PieceId oldId && lab.TryGetView(oldId, out PieceView oldView)) oldView.SetSelected(false);
             if (next is PieceId nextId && lab.World.TryGet(nextId, out _) && lab.TryGetView(nextId, out PieceView nextView))
             {

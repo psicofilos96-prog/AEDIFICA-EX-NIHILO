@@ -80,7 +80,7 @@ namespace Aedifica.Interaction
 
             PieceDimensions old = InitialPiece.Dimensions;
             float current = Axis == ManipulationAxis.X ? old.X : Axis == ManipulationAxis.Y ? old.Y : old.Z;
-            float dimension = Mathf.Max(old.MinimumForAxis((int)Axis), current + meters);
+            float dimension = Mathf.Max(InitialPiece.MinimumResizeDimension((int)Axis), current + meters);
             return ResizeToDimension(dimension);
         }
 
@@ -91,7 +91,7 @@ namespace Aedifica.Interaction
             if (Mode != ManipulationMode.Resize) throw new InvalidOperationException("Only Resize can set a dimension.");
             PieceDimensions old = InitialPiece.Dimensions;
             float current = Axis == ManipulationAxis.X ? old.X : Axis == ManipulationAxis.Y ? old.Y : old.Z;
-            float dimension = Mathf.Max(old.MinimumForAxis((int)Axis), requestedDimension);
+            float dimension = Mathf.Max(InitialPiece.MinimumResizeDimension((int)Axis), requestedDimension);
             PieceData resized = InitialPiece.WithDimensions(old.Resize((int)Axis, dimension));
             if (ResizeBehavior == ResizeMode.Center) return resized;
 

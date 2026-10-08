@@ -58,6 +58,11 @@ namespace Aedifica.Interaction
                 CollectCurved(piece, output, onlyFace, movingAxis, faceSign);
                 return;
             }
+            bool openWall = piece.Type == PieceType.Wall && piece.Openings.Count > 0;
+            bool passageAtBase = false;
+            if (openWall)
+                foreach (WallOpening opening in piece.Openings)
+                    if (opening.Bottom == 0f) { passageAtBase = true; break; }
             Vector3[] corners = new Vector3[8];
             for (int i = 0; i < 8; i++)
             {
@@ -72,7 +77,8 @@ namespace Aedifica.Interaction
                     if ((i & bit) == 0)
                     {
                         int other = i | bit;
-                        if (!onlyFace || OnMovingFace(i, movingAxis, faceSign) && OnMovingFace(other, movingAxis, faceSign))
+                        if (!(passageAtBase && bit == 1 && (i & 2) == 0) &&
+                            (!onlyFace || OnMovingFace(i, movingAxis, faceSign) && OnMovingFace(other, movingAxis, faceSign)))
                             output.Add(new SnapFeature(GeometricSnapKind.Edge, piece.Id, edgeIndex,
                                 corners[i], corners[other], Vector3.zero, Vector3.zero, Vector3.zero));
                         edgeIndex++;
@@ -82,6 +88,10 @@ namespace Aedifica.Interaction
             for (int side = -1; side <= 1; side += 2)
             {
                 if (onlyFace && (axis != (int)movingAxis || side != faceSign)) continue;
+                // The full front/back rectangle would falsely expose a snap
+                // surface across the empty passage or window.
+                if (openWall && axis == 2) continue;
+                if (passageAtBase && axis == 1 && side < 0) continue;
                 Vector3 localAxis = ManipulationSession.AxisVector((ManipulationAxis)axis);
                 float extent = axis == 0 ? piece.Dimensions.X : axis == 1 ? piece.Dimensions.Y : piece.Dimensions.Z;
                 Vector3 normal = piece.Transform.Rotation * localAxis * side;
@@ -92,6 +102,98 @@ namespace Aedifica.Interaction
                 Vector3 faceCenter = center + normal * (extent * 0.5f);
                 output.Add(new SnapFeature(GeometricSnapKind.Surface, piece.Id, axis * 2 + (side > 0 ? 1 : 0),
                     faceCenter, faceCenter, normal, u, v));
+            }
+            if (openWall)
+            {
+                CollectOpeningFaceSurfaces(piece, output, onlyFace, movingAxis, faceSign);
+                if (!onlyFace) CollectOpeningRims(piece, output);
+            }
+        }
+
+        private static void CollectOpeningFaceSurfaces(PieceData piece, List<SnapFeature> output,
+            bool onlyFace, ManipulationAxis axis, int sign)
+        {
+            var xs = new List<float> { 0f, piece.Dimensions.X };
+            var ys = new List<float> { 0f, piece.Dimensions.Y };
+            foreach (WallOpening opening in piece.Openings)
+            {
+                xs.Add(opening.Left); xs.Add(opening.Right);
+                ys.Add(opening.Bottom); ys.Add(opening.Top);
+            }
+            xs.Sort(); ys.Sort();
+            for (int i = xs.Count - 1; i > 0; i--) if (xs[i] == xs[i - 1]) xs.RemoveAt(i);
+            for (int i = ys.Count - 1; i > 0; i--) if (ys[i] == ys[i - 1]) ys.RemoveAt(i);
+            int feature = 100;
+            for (int x = 0; x < xs.Count - 1; x++)
+            for (int y = 0; y < ys.Count - 1; y++)
+            {
+                float midX = (xs[x] + xs[x + 1]) * 0.5f;
+                float midY = (ys[y] + ys[y + 1]) * 0.5f;
+                bool empty = false;
+                foreach (WallOpening opening in piece.Openings)
+                    if (midX > opening.Left && midX < opening.Right &&
+                        midY > opening.Bottom && midY < opening.Top) { empty = true; break; }
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    int index = feature++;
+                    if (empty || onlyFace && (axis != ManipulationAxis.Z || sign != side)) continue;
+                    Vector3 center = piece.Transform.Position + piece.Transform.Rotation *
+                        new Vector3(midX - piece.Dimensions.X * 0.5f, midY,
+                            side * piece.Dimensions.Z * 0.5f);
+                    output.Add(new SnapFeature(GeometricSnapKind.Surface, piece.Id, index,
+                        center, center, piece.Transform.Rotation * Vector3.forward * side,
+                        piece.Transform.Rotation * Vector3.right * ((xs[x + 1] - xs[x]) * 0.5f),
+                        piece.Transform.Rotation * Vector3.up * ((ys[y + 1] - ys[y]) * 0.5f)));
+                }
+            }
+        }
+
+        private static void CollectOpeningRims(PieceData piece, List<SnapFeature> output)
+        {
+            int endpoint = 8, edge = 12, surface = 6;
+            float halfLength = piece.Dimensions.X * 0.5f;
+            float halfThickness = piece.Dimensions.Z * 0.5f;
+            foreach (WallOpening opening in piece.Openings)
+            {
+                float left = opening.Left - halfLength, right = opening.Right - halfLength;
+                float bottom = opening.Bottom, top = opening.Top;
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    float z = side * halfThickness;
+                    Vector3[] rim = { new Vector3(left, bottom, z), new Vector3(right, bottom, z),
+                        new Vector3(right, top, z), new Vector3(left, top, z) };
+                    for (int i = 0; i < 4; i++)
+                    {
+                        Vector3 a = piece.Transform.Position + piece.Transform.Rotation * rim[i];
+                        Vector3 b = piece.Transform.Position + piece.Transform.Rotation * rim[(i + 1) % 4];
+                        output.Add(new SnapFeature(GeometricSnapKind.Endpoint, piece.Id, endpoint++,
+                            a, a, Vector3.zero, Vector3.zero, Vector3.zero));
+                        if (i != 0 || bottom > 0f)
+                            output.Add(new SnapFeature(GeometricSnapKind.Edge, piece.Id, edge,
+                                a, b, Vector3.zero, Vector3.zero, Vector3.zero));
+                        edge++;
+                    }
+                }
+                Vector3 pose = piece.Transform.Position;
+                Quaternion rotation = piece.Transform.Rotation;
+                Vector3 jambU = rotation * Vector3.up * (opening.Height * 0.5f);
+                Vector3 depthV = rotation * Vector3.forward * halfThickness;
+                Vector3 leftCenter = pose + rotation * new Vector3(left, (bottom + top) * 0.5f, 0f);
+                Vector3 rightCenter = pose + rotation * new Vector3(right, (bottom + top) * 0.5f, 0f);
+                output.Add(new SnapFeature(GeometricSnapKind.Surface, piece.Id, surface++,
+                    leftCenter, leftCenter, rotation * Vector3.right, jambU, depthV));
+                output.Add(new SnapFeature(GeometricSnapKind.Surface, piece.Id, surface++,
+                    rightCenter, rightCenter, rotation * Vector3.left, jambU, depthV));
+                Vector3 widthU = rotation * Vector3.right * (opening.Width * 0.5f);
+                Vector3 lintel = pose + rotation * new Vector3((left + right) * 0.5f, top, 0f);
+                output.Add(new SnapFeature(GeometricSnapKind.Surface, piece.Id, surface++,
+                    lintel, lintel, rotation * Vector3.down, widthU, depthV));
+                if (bottom > 0f)
+                {
+                    Vector3 sill = pose + rotation * new Vector3((left + right) * 0.5f, bottom, 0f);
+                    output.Add(new SnapFeature(GeometricSnapKind.Surface, piece.Id, surface++,
+                        sill, sill, rotation * Vector3.up, widthU, depthV));
+                }
             }
         }
 
