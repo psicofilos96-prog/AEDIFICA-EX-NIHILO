@@ -12,8 +12,10 @@ namespace Aedifica.Rendering
         [SerializeField] private Material brickMaterial;
         [SerializeField] private Material plasterMaterial;
         [SerializeField] private bool logMissingMaterials;
+        [SerializeField] private int historyCapacity = 256;
 
         private ConstructionWorld world;
+        private ConstructionCommandHistory history;
         private readonly Dictionary<PieceId, PieceView> views = new Dictionary<PieceId, PieceView>();
 
         public ConstructionWorld World => world;
@@ -87,6 +89,7 @@ namespace Aedifica.Rendering
                 view.Initialize(piece, Registry);
                 views.Add(piece.Id, view);
             }
+            history = new ConstructionCommandHistory(world, historyCapacity > 0 ? historyCapacity : 256);
         }
 
         private void OnDestroy()
@@ -98,19 +101,19 @@ namespace Aedifica.Rendering
 
         public bool Add(PieceData piece)
         {
-            if (piece == null || !world.Create(piece).Changed) return false;
+            if (piece == null || world.TryGet(piece.Id, out _) || views.ContainsKey(piece.Id)) return false;
             var viewObject = new GameObject($"Lab {piece.Type} {piece.Id}");
             viewObject.transform.SetParent(transform, false);
             try
             {
                 PieceView view = viewObject.AddComponent<PieceView>();
                 view.Initialize(piece, Registry);
+                if (!history.Create(piece).Changed) { Destroy(viewObject); return false; }
                 views.Add(piece.Id, view);
                 return true;
             }
             catch
             {
-                world.Delete(piece.Id);
                 Destroy(viewObject);
                 throw;
             }
@@ -119,7 +122,7 @@ namespace Aedifica.Rendering
         public bool Apply(PieceData replacement)
         {
             if (replacement == null) return false;
-            ConstructionChangeSet change = world.Update(replacement.Id, replacement);
+            ConstructionChangeSet change = history.Update(replacement.Id, replacement);
             if (change.Status == ConstructionChangeStatus.Rejected) return false;
             if (change.Changed) views[replacement.Id].Refresh(replacement);
             return true;
@@ -127,13 +130,50 @@ namespace Aedifica.Rendering
 
         public bool Delete(PieceId id)
         {
-            if (!world.Delete(id).Changed) return false;
+            if (!history.Delete(id).Changed) return false;
             if (views.TryGetValue(id, out PieceView view))
             {
                 views.Remove(id);
                 if (view != null) Destroy(view.gameObject);
             }
             return true;
+        }
+
+        public bool Undo()
+        {
+            if (!history.TryUndo(out ConstructionChangeSet change)) return false;
+            SyncView(change);
+            return true;
+        }
+
+        public bool Redo()
+        {
+            if (!history.TryRedo(out ConstructionChangeSet change)) return false;
+            SyncView(change);
+            return true;
+        }
+
+        private void SyncView(ConstructionChangeSet change)
+        {
+            if (change.After == null)
+            {
+                if (views.TryGetValue(change.PieceId, out PieceView removed))
+                {
+                    views.Remove(change.PieceId);
+                    if (removed != null) Destroy(removed.gameObject);
+                }
+                return;
+            }
+            if (views.TryGetValue(change.PieceId, out PieceView existing))
+            {
+                existing.Refresh(change.After);
+                return;
+            }
+            var visual = new GameObject($"Lab {change.After.Type} {change.PieceId}");
+            visual.transform.SetParent(transform, false);
+            PieceView view = visual.AddComponent<PieceView>();
+            view.Initialize(change.After, Registry);
+            views.Add(change.PieceId, view);
         }
 
         public bool CycleMaterial(PieceId id)
