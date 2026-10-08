@@ -277,8 +277,8 @@ MonoBehaviour:
     zoomMaxDistance: 400
     yawSpeed: 0.2
     pitchSpeed: 0.2
-    orbitYawSensitivity: 0.18
-    orbitPitchSensitivity: 0.18
+    orbitYawSensitivity: 0.216
+    orbitPitchSensitivity: 0.216
     keyboardYawSpeed: 90
     pitchMin: 15
     pitchMax: 80
@@ -288,7 +288,7 @@ MonoBehaviour:
   initialYaw: 0
   initialPitch: 45
   initialDistance: 25
-  debugHome: 1
+  debugHome: 0
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -853,7 +853,7 @@ MonoBehaviour:
   sceneCamera: {fileID: 330585545}
   cityCamera: {fileID: 330585548}
   debugSelection: 0
-  debugHome: 1
+  debugHome: 0
   snapSettings:
     PositionSnapEnabled: 0
     RotationSnapEnabled: 0

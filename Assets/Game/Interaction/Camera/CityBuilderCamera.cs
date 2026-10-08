@@ -119,8 +119,6 @@ namespace Aedifica.Interaction.Camera
             float distanceBeforeStep = motion.Distance;
             float consumedScroll = input.Scroll;
             motion.Step(input, Time.unscaledDeltaTime, settings);
-            if (debugHome && consumedScroll != 0f)
-                Debug.Log($"Home zoom: frame={Time.frameCount}, rawScroll={rawScroll:R}, processedScroll={consumedScroll:R}, distanceBefore={distanceBeforeStep:R}, distanceAfter={motion.Distance:R}, targetDistance={motion.TargetDistance:R}, focus={motion.Focus.ToString("F4")}, orbitActive={motion.IsOrbiting}", this);
             if (debugOrbit && motion.Distance != distanceBeforeStep)
             {
                 string cause = consumedScroll != 0f && !motion.IsOrbiting ? "ZoomInput" :

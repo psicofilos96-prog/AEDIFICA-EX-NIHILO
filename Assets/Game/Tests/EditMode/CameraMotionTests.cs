@@ -66,8 +66,8 @@ namespace Aedifica.Tests.EditMode
             Assert.That(motion.Focus, Is.EqualTo(Vector3.zero));
         }
 
-        [TestCase(40f, 0f, 7.2f, 45f)]
-        [TestCase(0f, 40f, 0f, 37.8f)]
+        [TestCase(40f, 0f, 8.64f, 45f)]
+        [TestCase(0f, 40f, 0f, 36.36f)]
         public void RmbChangesOnlyRequestedAngle(float x, float y, float expectedYaw, float expectedPitch)
         {
             var settings = new CameraSettings { smoothing = 0f };
@@ -126,8 +126,8 @@ namespace Aedifica.Tests.EditMode
                 Assert.That(motion.Distance, Is.EqualTo(distance));
                 filter.Filter(Vector2.zero, new Vector2(400f, 300f), new Vector2(400f, 300f), true);
                 motion.Step(new CameraInput { RotatePixels = filter.Filter(new Vector2(20f, -10f), new Vector2(400f, 300f), new Vector2(400f, 300f), true) }, 0.016f, settings);
-                Assert.That(motion.Yaw, Is.EqualTo(3.6f).Within(0.001f));
-                Assert.That(motion.Pitch, Is.EqualTo(46.8f).Within(0.001f));
+                Assert.That(motion.Yaw, Is.EqualTo(4.32f).Within(0.001f));
+                Assert.That(motion.Pitch, Is.EqualTo(47.16f).Within(0.001f));
                 Assert.That(motion.Focus, Is.EqualTo(focus));
                 Assert.That(motion.Distance, Is.EqualTo(distance));
                 motion.EndOrbit();
@@ -280,6 +280,29 @@ namespace Aedifica.Tests.EditMode
             finally { Object.DestroyImmediate(cameraObject); }
         }
 
+        [Test]
+        public void MeasuredFocusNeedsExplicitFramingBeforeScrollCanApproachRearDome()
+        {
+            var settings = new CameraSettings { smoothing = 0f };
+            var measuredFocus = new Vector3(1.9032f, 3.6986f, -1.9971f);
+            var domeBounds = new Bounds(new Vector3(12f, 1.25f, 27f), new Vector3(4f, 2.5f, 4f));
+            var motion = new CameraMotion(measuredFocus, 0f, 45f, 0.5f, settings);
+            float wheelStep = CameraScrollProcessor.Process(1f, out _);
+            motion.Step(new CameraInput { Scroll = wheelStep }, 0.016f, settings);
+            Assert.That(motion.Distance, Is.EqualTo(0.5f));
+            Assert.That(motion.Focus, Is.EqualTo(measuredFocus));
+            Assert.That(Vector3.Distance(motion.Position, domeBounds.center), Is.GreaterThan(25f));
+
+            motion.FrameBounds(domeBounds, 60f, 16f / 9f, 0.3f, settings);
+            motion.Step(new CameraInput(), 0.016f, settings);
+            Assert.That(Vector3.Distance(motion.Focus, domeBounds.center), Is.LessThan(0.0001f));
+            float framedDistance = motion.Distance;
+            Assert.That(framedDistance, Is.GreaterThan(0.5f).And.LessThan(10f));
+            motion.Step(new CameraInput { Scroll = wheelStep }, 0.016f, settings);
+            Assert.That(motion.Distance, Is.GreaterThan(0.5f).And.LessThan(framedDistance));
+            Assert.That(motion.Focus, Is.EqualTo(domeBounds.center));
+        }
+
         [TestCase(0f, 15f)]
         [TestCase(45f, 45f)]
         [TestCase(90f, 80f)]
@@ -365,8 +388,8 @@ namespace Aedifica.Tests.EditMode
             motion.BeginOrbit();
             motion.FrameBounds(new Bounds(Vector3.zero, Vector3.one), 60f, 16f / 9f, 0.3f, settings);
             motion.Step(new CameraInput { RotatePixels = new Vector2(10f, -10f) }, 0.016f, settings);
-            Assert.That(motion.Yaw, Is.EqualTo(1.8f).Within(0.001f));
-            Assert.That(motion.Pitch, Is.EqualTo(46.8f).Within(0.001f));
+            Assert.That(motion.Yaw, Is.EqualTo(2.16f).Within(0.001f));
+            Assert.That(motion.Pitch, Is.EqualTo(47.16f).Within(0.001f));
             Assert.That(motion.Focus, Is.EqualTo(focus));
             Assert.That(motion.Distance, Is.EqualTo(framedDistance));
             motion.EndOrbit();
@@ -375,7 +398,7 @@ namespace Aedifica.Tests.EditMode
             Assert.That(motion.Focus, Is.EqualTo(focus));
             motion.Step(new CameraInput { Move = Vector2.up, KeyboardYaw = 1f }, 0.1f, settings);
             Assert.That(Vector3.Distance(motion.Focus, focus), Is.GreaterThan(0f));
-            Assert.That(motion.Yaw, Is.GreaterThan(1.8f));
+            Assert.That(motion.Yaw, Is.GreaterThan(2.16f));
         }
 
         [Test]
@@ -528,9 +551,11 @@ namespace Aedifica.Tests.EditMode
             motion.BeginOrbit();
             Vector3 before = motion.Position;
             motion.Step(new CameraInput { RotatePixels = new Vector2(2f, -2f) }, 0.016f, settings);
-            Assert.That(Mathf.Abs(motion.Yaw), Is.LessThanOrEqualTo(0.4f + 0.001f));
-            Assert.That(Mathf.Abs(motion.Pitch - pitch), Is.LessThanOrEqualTo(0.4f + 0.001f));
-            Assert.That(Vector3.Distance(before, motion.Position), Is.LessThan(0.25f));
+            float maxAngle = 2f * settings.orbitYawSensitivity;
+            Assert.That(Mathf.Abs(motion.Yaw), Is.LessThanOrEqualTo(maxAngle + 0.001f));
+            Assert.That(Mathf.Abs(motion.Pitch - pitch), Is.LessThanOrEqualTo(maxAngle + 0.001f));
+            Assert.That(Vector3.Distance(before, motion.Position),
+                Is.LessThan(25f * Mathf.Sqrt(2f) * maxAngle * Mathf.Deg2Rad + 0.001f));
             Assert.That(Vector3.Distance(motion.Position, motion.Focus), Is.EqualTo(25f).Within(0.001f));
         }
 

@@ -46,6 +46,11 @@ namespace Aedifica.Tests.PlayMode
                 Assert.That(camera.transform.position, Is.EqualTo(originalPosition), "Home without selection must leave the camera unchanged.");
                 InputSystem.QueueStateEvent(testKeyboard, new KeyboardState());
                 yield return null;
+                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState(Key.C));
+                yield return null;
+                Assert.That(camera.transform.position, Is.EqualTo(originalPosition), "C without selection must leave the camera unchanged.");
+                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState());
+                yield return null;
 
                 PieceId domeId = PieceId.Parse("50000000000000000000000000000003");
                 Assert.That(lab.TryGetView(domeId, out PieceView dome), Is.True);
@@ -60,7 +65,7 @@ namespace Aedifica.Tests.PlayMode
                 interaction.PointerUp(pointer);
                 Assert.That(interaction.SelectedPieceId, Is.EqualTo(domeId));
 
-                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState(Key.Home));
+                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState(Key.C));
                 yield return null; // Exercise Input System and both MonoBehaviour.Update methods in their real order.
                 InputSystem.QueueStateEvent(testKeyboard, new KeyboardState());
                 yield return new WaitForSecondsRealtime(0.6f);
@@ -77,6 +82,23 @@ namespace Aedifica.Tests.PlayMode
                     Assert.That(projected.x, Is.InRange(0.08f, 0.92f));
                     Assert.That(projected.y, Is.InRange(0.08f, 0.92f));
                 }
+
+                Assert.That(cityCamera.FrameBounds(new Bounds(Vector3.zero, Vector3.one)), Is.True);
+                yield return new WaitForSecondsRealtime(0.6f);
+                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState(Key.Home));
+                yield return null;
+                InputSystem.QueueStateEvent(testKeyboard, new KeyboardState());
+                yield return new WaitForSecondsRealtime(0.6f);
+                Assert.That(camera.WorldToViewportPoint(bounds.center).x, Is.EqualTo(0.5f).Within(0.01f));
+                Assert.That(camera.WorldToViewportPoint(bounds.center).y, Is.EqualTo(0.5f).Within(0.01f));
+                float distanceBeforeWheel = Vector3.Distance(camera.transform.position, bounds.center);
+                InputSystem.QueueStateEvent(testMouse, new MouseState { scroll = Vector2.up });
+                yield return null;
+                InputSystem.QueueStateEvent(testMouse, new MouseState());
+                yield return new WaitForSecondsRealtime(0.3f);
+                float distanceAfterWheel = Vector3.Distance(camera.transform.position, bounds.center);
+                Assert.That(distanceAfterWheel, Is.LessThan(distanceBeforeWheel));
+                Assert.That(distanceAfterWheel, Is.GreaterThan(0.5f));
             }
             finally
             {

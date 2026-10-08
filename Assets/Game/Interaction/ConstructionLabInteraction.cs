@@ -105,7 +105,7 @@ namespace Aedifica.Interaction
                 if (keyboard.pageDownKey.wasPressedThisFrame) AdjustSelectedRoofRise(-0.1f);
                 if (keyboard.leftBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(-1);
                 if (keyboard.rightBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(1);
-                if (keyboard.homeKey.wasPressedThisFrame) FrameSelected();
+                if (keyboard.homeKey.wasPressedThisFrame || keyboard.cKey.wasPressedThisFrame) FrameSelected();
             }
 
             Mouse mouse = Mouse.current;
