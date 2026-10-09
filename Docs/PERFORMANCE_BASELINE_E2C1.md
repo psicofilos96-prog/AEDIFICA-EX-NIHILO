@@ -1,0 +1,34 @@
+# E2c.1 — Baseline visual do AEDIFICA
+
+## Objetivo e representação medida
+
+Este laboratório mede o caminho visual existente: para cada `PieceData`, cria um registro em `ConstructionWorld` e um GameObject individual com `PieceView`, malha gerada pelo projeto, `MeshRenderer`, material compartilhado e collider apropriado. Não usa instancing, mesh combining, LOD, terreno externo ou objetos lógicos sem visual. Os IDs e as views continuam individuais e editáveis. As metas de produto (80–100 FPS normalmente e 60 FPS em cidades enormes) são referências, não resultados certificados.
+
+`VisualBenchmarkScenario` gera peças determinísticas com seed 2301 em uma espiral de construções ao redor da origem, distribuídas em coordenadas positivas e negativas. Cada grupo contém piso, paredes, blocos e cobertura (Gable/Shed/Hip alternadas), com materiais Neutral/Stone/Brick/Plaster da própria URP do projeto, yaw variado e dimensões diferentes. A cena contém uma câmera com FOV 60°, near 0,3 m, far 2.500 m, e luz direcional com sombra suave. Os cenários progressivos são V1=1.000, V2=5.000, V3=10.000, V4=25.000 e V5=50.000 peças **realmente instanciadas**. O seed, posição e ID de cada índice permanecem estáveis entre cenários. Peças já criadas permanecem na cena enquanto o cenário cresce.
+
+## Medição e segurança
+
+A criação ocorre em lotes configuráveis (padrão 32) com yield entre lotes. Antes de cada lote, o runner verifica tempo de geração do cenário (padrão máximo 1.200 s), heap gerenciado e memória Unity reservada (limite padrão 4.096 MB); cada captura também possui duração configurável com teto (padrão 30 s, teto 120 s). V5 só é tentado se os limites permitirem. Se um cenário parar parcialmente, o CSV registra `failed` para suas três repetições e dois modos de câmera e `skipped` para todos os cenários posteriores, com motivo e quantidades realmente criadas. A limpeza das views é feita em lotes. A detecção não cobre toda a memória nativa do sistema operacional ou VRAM; a aplicação pode ser encerrada externamente antes que consiga escrever uma falha.
+
+Após gerar cada cenário, o runner executa três repetições de cada modo, com 15 s de aquecimento e 30 s de captura por padrão:
+
+- `fixed`: câmera estacionária em (0, 160, -240), olhando a origem.
+- `path`: câmera percorre uma órbita completa determinística de raio 240 m e altura 160 m durante a captura, olhando a origem. O mesmo percurso normalizado é repetido em cada execução.
+
+Os modos são registrados separadamente. Tempo de criação (`create_ms`) é a soma cumulativa dos intervalos de CPU dos lotes até o cenário, excluindo os yields; **não** integra a amostragem de FPS. `pieces` é a contagem lógica em `ConstructionWorld`; `views` é o número de GameObjects com `PieceView` inicializada; `renderers_active` conta `MeshRenderer` habilitados em objetos ativos; `renderers_visible` é um snapshot de `Renderer.isVisible` após aquecimento, fora do intervalo de captura. Para `path`, a visibilidade muda durante o percurso e o snapshot não é média temporal. A câmera fixa favorece comparações diretas entre cargas; nem todas as peças instanciadas ficam necessariamente visíveis ao mesmo tempo.
+
+O CSV exclusivo `aedifica_E2c1_visual_*.csv` registra UTC, `AEDIFICA_COMMIT`, Unity, SO/plataforma, Editor/Player, CPU/GPU/RAM/VRAM nominal, seed, cenário, repetição, modo, contagens, resolução efetiva, VSync, `Application.targetFrameRate`, qualidade, criação, aquecimento/captura, frames, FPS médio/mediano/p01, frame time médio/p50/p95/p99, CPU/GPU por frame e draw calls/batches médios quando seus contadores `ProfilerRecorder` estiverem disponíveis, heap gerenciado, memória Unity alocada/reservada, coletas Gen0 e bytes alocados pela thread principal quando suportados. Valor `unavailable` significa contador indisponível, sem amostra válida ou linha ignorada; não equivale a zero. `fps_p01` é calculado como 1000 dividido pelo p99 de frame time. Percentis usam nearest-rank. `Main Thread` e `GPU Frame Time` são contadores de Profiler e podem estar indisponíveis em builds sem suporte; não inferir gargalo só da ausência de dados. As amostras de frame time usam `Time.unscaledDeltaTime`, que inclui o custo visual e outros custos do Player. As leituras de contador acrescentam algum overhead ao benchmark, mas contagens de renderizadores e exportação CSV ocorrem fora da captura.
+
+## Execução no Lenovo LOQ
+
+1. Após publicação autorizada da branch, obter o SHA no Windows. Abrir no Unity 6000.6.4f1, confirmar Console sem erro e executar EditMode/PlayMode completos.
+2. No menu, escolher **Tools > Aedifica > E2c.1 > Create Visual Benchmark Scene**. Isso gera localmente `Assets/Game/Scenes/VisualBenchmarkE2c1.unity` e a coloca como primeira cena habilitada no Build Settings. Revisar a cena gerada; não versioná-la automaticamente. Os materiais existentes são resolvidos antes de salvá-la.
+3. Criar Windows x64 Standalone **Release**, com Development Build desativado. Executar em 1920×1080; verificar no CSV a resolução efetiva. Para medições sem limitação, confirmar `vsync=0` e `target_fps=-1` no CSV. Registrar plano de energia, GPU utilizada e condições do notebook; não mudar configurações gráficas do projeto para mascarar gargalos.
+4. No PowerShell aberto em `C:\Projetos\AEDIFICA-EX-NIHILO`, executar `$env:AEDIFICA_COMMIT = (git rev-parse HEAD).Trim()` e iniciar o executável pelo mesmo terminal. Acompanhar no `Player.log` as linhas `scenario begin`, `generation progress`, `capture begin/complete`, `scenario complete` e `visual benchmark complete`.
+5. Arquivar o CSV em `Application.persistentDataPath` (normalmente `%USERPROFILE%\AppData\LocalLow\DefaultCompany\AEDIFICA-EX-NIHILO`) e o `Player.log` no mesmo diretório. Uma execução integral produz **30 linhas `ok`** (5 cenários × 3 repetições × 2 modos). Se V5 ou outro cenário exceder limites, examinar `failed`/`skipped` e não tratá-lo como medido. Repetir a execução completa para avaliar ruído térmico e de energia.
+
+## Interpretação e homologação
+
+Relatar separadamente número de peças lógicas, views, renderizadores ativos e visíveis. Comparar `fixed` e `path` dentro do mesmo cenário. CPU elevado com GPU abaixo do frame time sugere custo de lógica/driver ou submissão; GPU elevado sugere custo visual; draw calls/batches altos apontam custo de submissão; memória crescente e coletas frequentes indicam pressão de alocação. Essas pistas exigem confirmação por Profiler: a disponibilidade dos contadores varia por plataforma e build. Não extrapolar V5 para uma cidade de 50.000 peças **visíveis simultaneamente** se a contagem visível for menor.
+
+A E2c.1 só será homologada após compilação, testes Unity, CSV e Player.log da build Windows no hardware-alvo, com amostras suficientes, condições registradas e análise das falhas/limites. O ambiente remoto não executou o Unity nem mediu FPS. Nenhum ganho de renderização é alegado nesta etapa; esta é a referência para uma otimização posterior.
