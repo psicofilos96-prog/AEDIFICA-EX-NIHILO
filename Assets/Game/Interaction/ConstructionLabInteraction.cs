@@ -145,6 +145,7 @@ namespace Aedifica.Interaction
                 if (keyboard.rightBracketKey.wasPressedThisFrame) AdjustSelectedStepCount(1);
                 if (keyboard.homeKey.wasPressedThisFrame || keyboard.cKey.wasPressedThisFrame) FrameSelected();
                 ApplyOpeningCommand(ReadOpeningCommandWithRepeat(keyboard));
+                if (ReadPieceDeleteShortcut(keyboard)) DeleteSelectedPiece();
             }
             else repeatingOpeningCommand = OpeningCommand.None;
 
@@ -282,6 +283,34 @@ namespace Aedifica.Interaction
             if (keyboard.nKey.wasPressedThisFrame) return OpeningCommand.Shorten;
             if (keyboard.bKey.wasPressedThisFrame) return OpeningCommand.Heighten;
             return OpeningCommand.None;
+        }
+
+        public static bool ReadPieceDeleteShortcut(Keyboard keyboard) =>
+            keyboard != null && keyboard.backspaceKey.wasPressedThisFrame;
+
+        private bool DeleteSelectedPiece()
+        {
+            if (placement.Active || session != null || draggingPan ||
+                Mouse.current != null && Mouse.current.leftButton.isPressed ||
+                !(selection.SelectedPieceId is PieceId id)) return false;
+            lab.TryGetView(id, out PieceView selectedView);
+            if (!lab.Delete(id)) return false;
+            if (selectedView != null) selectedView.SetSelected(false);
+            selection.Clear();
+            selectedOpeningId = null;
+            pressedPieceId = null;
+            pressedOpeningId = null;
+            repeatingOpeningCommand = OpeningCommand.None;
+            openingFeedback = null;
+            openingFeedbackUntil = 0f;
+            hudWallId = null;
+            hudOpeningId = null;
+            hudOpeningData = default;
+            hudHasOpening = false;
+            hudOpeningCount = -1;
+            hudText = null;
+            if (gizmo != null) gizmo.Hide();
+            return true;
         }
 
         private OpeningCommand ReadOpeningCommandWithRepeat(Keyboard keyboard)

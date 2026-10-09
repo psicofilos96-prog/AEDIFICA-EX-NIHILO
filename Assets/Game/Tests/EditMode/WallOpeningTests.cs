@@ -27,6 +27,7 @@ namespace Aedifica.Tests.EditMode
         [TestCase(Key.Insert, OpeningCommand.AddPassage)]
         [TestCase(Key.Tab, OpeningCommand.Next)]
         [TestCase(Key.Delete, OpeningCommand.Remove)]
+        [TestCase(Key.Backspace, OpeningCommand.None)]
         [TestCase(Key.J, OpeningCommand.MoveLeft)]
         [TestCase(Key.L, OpeningCommand.MoveRight)]
         [TestCase(Key.I, OpeningCommand.MoveUp)]
@@ -65,6 +66,25 @@ namespace Aedifica.Tests.EditMode
                     Is.EqualTo(OpeningCommand.AddWindow));
                 InputSystem.RemoveDevice(keyboard);
             }
+        }
+
+        [Test]
+        public void BackspaceIsDistinctFromOpeningDeleteAndOnlyTriggersOnPress()
+        {
+            Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+            keyboard.MakeCurrent();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Delete));
+            InputSystem.Update();
+            Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(OpeningCommand.Remove));
+            Assert.That(ConstructionLabInteraction.ReadPieceDeleteShortcut(keyboard), Is.False);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            InputSystem.Update();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Backspace));
+            InputSystem.Update();
+            Assert.That(ConstructionLabInteraction.ReadOpeningCommand(keyboard), Is.EqualTo(OpeningCommand.None));
+            Assert.That(ConstructionLabInteraction.ReadPieceDeleteShortcut(keyboard), Is.True);
+            InputSystem.Update();
+            Assert.That(ConstructionLabInteraction.ReadPieceDeleteShortcut(keyboard), Is.False);
         }
 
         [Test]
