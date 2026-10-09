@@ -655,7 +655,7 @@ namespace Aedifica.Interaction
             {
                 IEnumerable<PieceData> candidates = session.Mode == ManipulationMode.Move
                     ? SpatialSnapCandidates.ForMove(lab.World, changed, snapSettings)
-                    : lab.World.Pieces; // Keep Face Resize on its original candidate path.
+                    : SpatialSnapCandidates.ForFaceResize(lab.World, changed, session, snapSettings);
                 changed = geometricSnap.Resolve(changed, session, snapSettings, candidates);
                 if (geometricSnap.HasTarget)
                 {
