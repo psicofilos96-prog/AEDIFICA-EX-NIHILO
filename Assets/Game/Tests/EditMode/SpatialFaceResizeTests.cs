@@ -22,6 +22,10 @@ namespace Aedifica.Tests.EditMode
             foreach (ManipulationAxis axis in new[] { ManipulationAxis.X, ManipulationAxis.Y, ManipulationAxis.Z })
             foreach (int sign in new[] { -1, 1 })
             {
+                // Sloped roofs derive Y from thickness and rise; only X/Z support Resize.
+                if (axis == ManipulationAxis.Y &&
+                    (type == PieceType.ShedRoof || type == PieceType.GableRoof || type == PieceType.HipRoof))
+                    continue;
                 Vector3 position = serial % 2 == 0 ? new Vector3(-64f, 0f, 64f)
                     : new Vector3(1000000f, 0f, -1000000f);
                 PieceData initial = FreePieceCatalog.Create(type, Id(serial++), position, yaw);
@@ -52,6 +56,22 @@ namespace Aedifica.Tests.EditMode
                     Equal(expected, actual, full, spatial, $"{type} axis={axis} sign={sign} yaw={yaw} frame={frame}");
                 }
             }
+        }
+
+        [TestCase(PieceType.ShedRoof, -1)]
+        [TestCase(PieceType.ShedRoof, 1)]
+        [TestCase(PieceType.GableRoof, -1)]
+        [TestCase(PieceType.GableRoof, 1)]
+        [TestCase(PieceType.HipRoof, -1)]
+        [TestCase(PieceType.HipRoof, 1)]
+        public void SlopedRoofDerivedHeightRejectsFaceResizeOnY(PieceType type, int sign)
+        {
+            PieceData initial = FreePieceCatalog.Create(type, Id(1), Vector3.zero, 45f);
+            float requestedHeight = initial.Dimensions.Y + 0.2f;
+            Assert.Throws<InvalidOperationException>(() => initial.Dimensions.Resize(1, requestedHeight));
+            var session = new ManipulationSession(initial, ManipulationMode.Resize, ManipulationAxis.Y,
+                Vector2.zero, Vector2.right, 100f, null, ResizeMode.Face, sign);
+            Assert.Throws<InvalidOperationException>(() => session.ResizeToDimension(requestedHeight));
         }
 
         [Test]
