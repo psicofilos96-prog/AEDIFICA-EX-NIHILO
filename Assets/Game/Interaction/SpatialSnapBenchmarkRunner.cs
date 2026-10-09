@@ -27,6 +27,14 @@ namespace Aedifica.Interaction
             public bool HasTarget;
             public PieceId TargetId;
             public GeometricSnapKind Kind;
+            public Vector3 Point;
+        }
+
+        private struct BatchMeasurement
+        {
+            public double[] Times;
+            public long ManagedBefore, ManagedAfter;
+            public long? AllocatedBytes;
         }
 
         private IEnumerator Start()
@@ -115,7 +123,8 @@ namespace Aedifica.Interaction
                 full.Reset();
                 PieceData result = full.Resolve(raw[i], sessions[i], settings, world.Pieces);
                 fullResults[i] = new Result { Piece = result, HasTarget = full.HasTarget,
-                    TargetId = full.HasTarget ? full.TargetId : default, Kind = full.HasTarget ? full.ActiveKind : default };
+                    TargetId = full.HasTarget ? full.TargetId : default, Kind = full.HasTarget ? full.ActiveKind : default,
+                    Point = full.HasTarget ? full.TargetPoint : default };
             }
             void Indexed(int i)
             {
@@ -124,39 +133,72 @@ namespace Aedifica.Interaction
                 candidateCounts[i] = candidates.Count;
                 PieceData result = indexed.Resolve(raw[i], sessions[i], settings, candidates);
                 indexedResults[i] = new Result { Piece = result, HasTarget = indexed.HasTarget,
-                    TargetId = indexed.HasTarget ? indexed.TargetId : default, Kind = indexed.HasTarget ? indexed.ActiveKind : default };
+                    TargetId = indexed.HasTarget ? indexed.TargetId : default, Kind = indexed.HasTarget ? indexed.ActiveKind : default,
+                    Point = indexed.HasTarget ? indexed.TargetPoint : default };
             }
 
-            // Alternate batch order between repetitions to expose cache/GC ordering effects.
-            if (repeat % 2 == 0) { Measure("spatial", Indexed); Measure("linear", Full); }
-            else { Measure("linear", Full); Measure("spatial", Indexed); }
+            // ABBA or BAAB: each path gets 64 samples in the first and second half,
+            // and the same average execution position inside every repetition.
+            int half = Samples / 2;
+            BatchMeasurement fullFirst, fullSecond, spatialFirst, spatialSecond;
+            if (repeat % 2 == 0)
+            {
+                spatialFirst = Measure(Indexed, 0, half);
+                fullFirst = Measure(Full, 0, half);
+                fullSecond = Measure(Full, half, Samples);
+                spatialSecond = Measure(Indexed, half, Samples);
+            }
+            else
+            {
+                fullFirst = Measure(Full, 0, half);
+                spatialFirst = Measure(Indexed, 0, half);
+                spatialSecond = Measure(Indexed, half, Samples);
+                fullSecond = Measure(Full, half, Samples);
+            }
             for (int i = 0; i < Samples; i++)
             {
                 Result a = fullResults[i], b = indexedResults[i];
                 if (!a.Piece.Transform.Equals(b.Piece.Transform) || !a.Piece.Dimensions.Equals(b.Piece.Dimensions) ||
-                    a.HasTarget != b.HasTarget || a.HasTarget && (a.TargetId != b.TargetId || a.Kind != b.Kind))
-                    throw new InvalidOperationException($"Snap result differs at sample {i}: linear={a.TargetId}, spatial={b.TargetId}.");
+                    a.HasTarget != b.HasTarget || a.HasTarget && (a.TargetId != b.TargetId || a.Kind != b.Kind ||
+                    !a.Point.Equals(b.Point)))
+                    throw new InvalidOperationException($"Snap divergence: sample={i}, raw={raw[i].Transform.Position}, " +
+                        $"yaw={raw[i].Transform.Rotation.eulerAngles.y}, linearTarget={a.TargetId}, " +
+                        $"spatialTarget={b.TargetId}, linearKind={a.Kind}, spatialKind={b.Kind}, " +
+                        $"linearPoint={a.Point}, spatialPoint={b.Point}, " +
+                        $"linearPosition={a.Piece.Transform.Position}, spatialPosition={b.Piece.Transform.Position}.");
             }
+            Write("linear", fullFirst, fullSecond, count, fullResults.Count(result => result.HasTarget));
+            Write("spatial", spatialFirst, spatialSecond, candidateCounts.Average(),
+                indexedResults.Count(result => result.HasTarget));
 
-            void Measure(string method, Action<int> action)
+            BatchMeasurement Measure(Action<int> action, int first, int end)
             {
                 GC.Collect();
                 if (GC.GetTotalMemory(false) > 1536L * 1024L * 1024L)
                     throw new OutOfMemoryException("Managed memory exceeded 1.5 GB; scenario size was not reduced.");
                 long beforeMemory = GC.GetTotalMemory(false);
                 long? beforeAlloc = ThreadAllocated();
-                var times = new double[Samples];
+                var times = new double[end - first];
                 Stopwatch batch = Stopwatch.StartNew();
-                for (int i = 0; i < Samples; i++)
+                for (int i = first; i < end; i++)
                 {
                     if (batch.Elapsed.TotalMinutes > 5d)
                         throw new TimeoutException("Snap batch exceeded five minutes; samples were not reduced.");
                     long start = Stopwatch.GetTimestamp();
                     action(i);
-                    times[i] = (Stopwatch.GetTimestamp() - start) * 1000d / Stopwatch.Frequency;
+                    times[i - first] = (Stopwatch.GetTimestamp() - start) * 1000d / Stopwatch.Frequency;
                 }
                 long? afterAlloc = ThreadAllocated();
                 long afterMemory = GC.GetTotalMemory(false);
+                return new BatchMeasurement { Times = times, ManagedBefore = beforeMemory,
+                    ManagedAfter = afterMemory, AllocatedBytes = beforeAlloc.HasValue && afterAlloc.HasValue
+                        ? afterAlloc.Value - beforeAlloc.Value : (long?)null };
+            }
+
+            void Write(string method, BatchMeasurement first, BatchMeasurement second,
+                double candidateMean, int matched)
+            {
+                double[] times = first.Times.Concat(second.Times).ToArray();
                 Array.Sort(times);
                 double total = times.Sum();
                 string N(double value) => value.ToString("F6", CultureInfo.InvariantCulture);
@@ -167,12 +209,13 @@ namespace Aedifica.Interaction
                     SystemInfo.processorType, SystemInfo.graphicsDeviceName,
                     SystemInfo.systemMemorySize > 0 ? SystemInfo.systemMemorySize.ToString() : "unavailable",
                     count.ToString(), world.SpatialIndex.OccupiedChunkCount.ToString(), repeat.ToString(), method,
-                    Samples.ToString(), method == "spatial" ? N(candidateCounts.Average()) : N(count),
+                    Samples.ToString(), matched.ToString(), N(candidateMean),
                     method == "spatial" ? candidateCounts.Min().ToString() : count.ToString(),
                     method == "spatial" ? candidateCounts.Max().ToString() : count.ToString(),
                     N(total), N(total / Samples), N(Percentile(times, 0.50d)), N(Percentile(times, 0.95d)),
-                    N(Percentile(times, 0.99d)), beforeMemory.ToString(), afterMemory.ToString(),
-                    beforeAlloc.HasValue && afterAlloc.HasValue ? (afterAlloc.Value - beforeAlloc.Value).ToString() : "unavailable",
+                    N(Percentile(times, 0.99d)), first.ManagedBefore.ToString(), second.ManagedAfter.ToString(),
+                    first.AllocatedBytes.HasValue && second.AllocatedBytes.HasValue
+                        ? (first.AllocatedBytes.Value + second.AllocatedBytes.Value).ToString() : "unavailable",
                     "ok", ""
                 });
             }
@@ -202,7 +245,7 @@ namespace Aedifica.Interaction
                 Environment.GetEnvironmentVariable("AEDIFICA_COMMIT") ?? "unavailable", Application.unityVersion,
                 Application.platform.ToString(), Application.isEditor ? "Editor" : "Player", SystemInfo.processorType,
                 SystemInfo.graphicsDeviceName, SystemInfo.systemMemorySize.ToString(), count.ToString(), "unavailable",
-                repeat.ToString(), "failure", "0", "unavailable", "unavailable", "unavailable", "unavailable",
+                repeat.ToString(), "failure", "0", "unavailable", "unavailable", "unavailable", "unavailable", "unavailable",
                 "unavailable", "unavailable", "unavailable", "unavailable", "unavailable", "unavailable",
                 "unavailable", "failed", error.GetType().Name + ": " + error.Message });
         }
@@ -213,6 +256,6 @@ namespace Aedifica.Interaction
             File.AppendAllText(outputPath, string.Join(",", fields) + Environment.NewLine);
         }
 
-        private const string Header = "utc,scenario,seed,commit,unity,platform,environment,cpu,gpu,ram_mb_capacity,pieces,chunks,repeat,method,samples,candidates_mean,candidates_min,candidates_max,total_ms,mean_ms,p50_ms,p95_ms,p99_ms,managed_before_bytes,managed_after_bytes,thread_allocated_delta_bytes,status,error";
+        private const string Header = "utc,scenario,seed,commit,unity,platform,environment,cpu,gpu,ram_mb_capacity,pieces,chunks,repeat,method,samples,matched_samples,candidates_mean,candidates_min,candidates_max,total_ms,mean_ms,p50_ms,p95_ms,p99_ms,managed_before_bytes,managed_after_bytes,thread_allocated_delta_bytes,status,error";
     }
 }
