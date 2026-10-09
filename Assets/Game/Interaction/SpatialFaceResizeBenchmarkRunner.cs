@@ -12,12 +12,37 @@ using Debug = UnityEngine.Debug;
 
 namespace Aedifica.Interaction
 {
+    public sealed class SpatialFaceResizeRunContext
+    {
+        // A logical 50k-piece full scan can take longer than five minutes for 96 frames.
+        public const int RunTimeoutMinutes = 20;
+        public string Scenario;
+        public int Pieces;
+        public int Repeat;
+        public string Method;
+        public string Phase;
+        public int Frame;
+        public int FramesProcessed;
+        public double ElapsedSeconds;
+
+        public static bool TimedOut(double elapsedSeconds) => elapsedSeconds > RunTimeoutMinutes * 60d;
+
+        public static bool IsDivergence(string phase, Exception error) =>
+            phase != null && phase.EndsWith("/equivalence", StringComparison.Ordinal) &&
+            error is InvalidOperationException;
+
+        public string Describe() => $"scenario={Scenario}, pieces={Pieces}, repeat={Repeat}, " +
+            $"method={Method}, phase={Phase}, frame={Frame}, framesProcessed={FramesProcessed}, " +
+            $"elapsedSeconds={ElapsedSeconds.ToString("F3", CultureInfo.InvariantCulture)}";
+    }
+
     // Logical snap benchmark: one resolver persists through every frame of each gesture.
     public sealed class SpatialFaceResizeBenchmarkRunner : MonoBehaviour
     {
         private const int Repetitions = 3;
         private const int Samples = ContinuousSnapWorkload.Cases * ContinuousSnapWorkload.Frames;
         private string outputPath;
+        private SpatialFaceResizeRunContext activeRun;
 
         private struct Sample
         {
@@ -45,32 +70,45 @@ namespace Aedifica.Interaction
             File.WriteAllText(outputPath, Header + Environment.NewLine);
             try
             {
+                activeRun = new SpatialFaceResizeRunContext { Scenario = "warmup", Pieces = 0,
+                    Repeat = 0, Method = "setup", Phase = "warmup", Frame = -1 };
                 ConstructionWorld warm = ContinuousSnapWorkload.World(0);
-                Run(warm, false, false);
-                Run(warm, true, false);
-                Run(warm, false, true);
-                Run(warm, true, true);
+                RunMeasured(warm, 0, 0, false, false, "warmup/1");
+                RunMeasured(warm, 0, 0, true, false, "warmup/2");
+                RunMeasured(warm, 0, 0, false, true, "warmup/3");
+                RunMeasured(warm, 0, 0, true, true, "warmup/4");
             }
             catch (Exception error)
             {
                 Failure("warmup", 0, 0, error);
+                Debug.LogError($"E2b.3 benchmark failed: {activeRun.Describe()}, " +
+                    $"exception={error.GetType().Name}: {error.Message}", this);
                 Debug.LogException(error, this);
                 yield break;
             }
             yield return null;
             foreach (int count in SpatialStressScenario.Sizes)
             {
+                string scenario = Scenario(count);
+                activeRun = new SpatialFaceResizeRunContext { Scenario = scenario, Pieces = count,
+                    Repeat = 0, Method = "setup", Phase = "scenario-start", Frame = -1 };
+                Debug.Log($"E2b.3 scenario begin: {activeRun.Describe()}", this);
                 if (SystemInfo.systemMemorySize > 0 && SystemInfo.systemMemorySize < 8192)
                 {
-                    Failure(Scenario(count), count, 0,
-                        new InvalidOperationException("At least 8 GB RAM required; scenario size was not reduced."));
+                    var error = new InvalidOperationException("At least 8 GB RAM required; scenario size was not reduced.");
+                    Failure(scenario, count, 0, error);
+                    Debug.LogError($"E2b.3 benchmark failed: {activeRun.Describe()}, " +
+                        $"exception={error.GetType().Name}: {error.Message}", this);
+                    Debug.LogException(error, this);
                     yield break;
                 }
                 ConstructionWorld world;
                 try { world = ContinuousSnapWorkload.World(count); }
                 catch (Exception error)
                 {
-                    Failure(Scenario(count), count, 0, error);
+                    Failure(scenario, count, 0, error);
+                    Debug.LogError($"E2b.3 benchmark failed: {activeRun.Describe()}, " +
+                        $"exception={error.GetType().Name}: {error.Message}", this);
                     Debug.LogException(error, this);
                     yield break;
                 }
@@ -78,50 +116,64 @@ namespace Aedifica.Interaction
                 {
                     try
                     {
+                        activeRun = new SpatialFaceResizeRunContext { Scenario = scenario, Pieces = count,
+                            Repeat = repeat, Method = "resource_check", Phase = "before-repetition", Frame = -1 };
                         if (GC.GetTotalMemory(false) > 1536L * 1024L * 1024L)
                             throw new OutOfMemoryException("Managed memory exceeded 1.5 GB; scenario size was not reduced.");
                         MeasureRepetition(world, count, repeat);
+                        Debug.Log($"E2b.3 repetition complete: scenario={scenario}, pieces={count}, " +
+                            $"repeat={repeat}, methods=4, csv={outputPath}", this);
                     }
                     catch (Exception error)
                     {
-                        Failure(Scenario(count), count, repeat, error);
+                        Failure(scenario, count, repeat, error);
+                        Debug.LogError($"E2b.3 benchmark failed: {activeRun.Describe()}, " +
+                            $"exception={error.GetType().Name}: {error.Message}", this);
                         Debug.LogException(error, this);
                         yield break;
                     }
                     yield return null;
                 }
+                Debug.Log($"E2b.3 scenario complete: scenario={scenario}, pieces={count}, " +
+                    $"repetitions={Repetitions}", this);
             }
-            Debug.Log($"E2b.3 continuous snap benchmark complete: {outputPath}", this);
+            Debug.Log($"E2b.3 continuous snap benchmark complete: records=36, csv={outputPath}", this);
         }
 
         private void MeasureRepetition(ConstructionWorld world, int count, int repeat)
         {
             // Each path occupies both an outer and an inner position in every repetition.
             bool spatialFirst = repeat % 2 == 0;
-            RunResult first = Run(world, spatialFirst, false);
-            RunResult second = Run(world, !spatialFirst, false);
-            RunResult third = Run(world, !spatialFirst, false);
-            RunResult fourth = Run(world, spatialFirst, false);
+            string sequence = spatialFirst ? "BAAB" : "ABBA";
+            RunResult first = RunMeasured(world, count, repeat, spatialFirst, false, $"move/{sequence}/slot1");
+            RunResult second = RunMeasured(world, count, repeat, !spatialFirst, false, $"move/{sequence}/slot2");
+            RunResult third = RunMeasured(world, count, repeat, !spatialFirst, false, $"move/{sequence}/slot3");
+            RunResult fourth = RunMeasured(world, count, repeat, spatialFirst, false, $"move/{sequence}/slot4");
             RunResult linearA = spatialFirst ? second : first;
             RunResult linearB = spatialFirst ? third : fourth;
             RunResult spatialA = spatialFirst ? first : second;
             RunResult spatialB = spatialFirst ? fourth : third;
+            ComparisonContext(count, repeat, "move_linear_vs_move_spatial", "move/equivalence");
             Compare(linearA, spatialA, "move linear/spatial");
             Compare(linearB, spatialB, "move linear/spatial repeat");
             Compare(linearA, linearB, "move linear repeat");
 
             // Independent ABBA/BAAB order for Face Resize, with persistent gesture state.
-            RunResult faceFirst = Run(world, spatialFirst, true);
-            RunResult faceSecond = Run(world, !spatialFirst, true);
-            RunResult faceThird = Run(world, !spatialFirst, true);
-            RunResult faceFourth = Run(world, spatialFirst, true);
+            RunResult faceFirst = RunMeasured(world, count, repeat, spatialFirst, true, $"face/{sequence}/slot1");
+            RunResult faceSecond = RunMeasured(world, count, repeat, !spatialFirst, true, $"face/{sequence}/slot2");
+            RunResult faceThird = RunMeasured(world, count, repeat, !spatialFirst, true, $"face/{sequence}/slot3");
+            RunResult faceFourth = RunMeasured(world, count, repeat, spatialFirst, true, $"face/{sequence}/slot4");
             RunResult faceLinearA = spatialFirst ? faceSecond : faceFirst;
             RunResult faceLinearB = spatialFirst ? faceThird : faceFourth;
             RunResult faceSpatialA = spatialFirst ? faceFirst : faceSecond;
             RunResult faceSpatialB = spatialFirst ? faceFourth : faceThird;
+            ComparisonContext(count, repeat, "face_linear_vs_face_spatial", "face/equivalence");
             Compare(faceLinearA, faceSpatialA, "face linear/spatial");
             Compare(faceLinearB, faceSpatialB, "face linear/spatial repeat");
             Compare(faceLinearA, faceLinearB, "face linear repeat");
+            activeRun = new SpatialFaceResizeRunContext { Scenario = Scenario(count), Pieces = count,
+                Repeat = repeat, Method = "csv_write", Phase = "validated", Frame = Samples - 1,
+                FramesProcessed = Samples };
             int chunks = world.SpatialIndex.OccupiedChunkCount;
             Write(Scenario(count), count, chunks, repeat, "move_linear", linearA, linearB);
             Write(Scenario(count), count, chunks, repeat, "move_spatial", spatialA, spatialB);
@@ -129,11 +181,36 @@ namespace Aedifica.Interaction
             Write(Scenario(count), count, chunks, repeat, "face_spatial", faceSpatialA, faceSpatialB);
         }
 
-        private static RunResult Run(ConstructionWorld world, bool spatial, bool face)
+        private RunResult RunMeasured(ConstructionWorld world, int count, int repeat,
+            bool spatial, bool face, string phase)
+        {
+            activeRun = new SpatialFaceResizeRunContext { Scenario = count == 0 ? "warmup" : Scenario(count),
+                Pieces = count, Repeat = repeat, Method = (face ? "face" : "move") +
+                (spatial ? "_spatial" : "_linear"), Phase = phase, Frame = -1 };
+            Stopwatch duration = Stopwatch.StartNew();
+            try { return Run(world, spatial, face, activeRun); }
+            catch
+            {
+                activeRun.ElapsedSeconds = duration.Elapsed.TotalSeconds;
+                throw;
+            }
+        }
+
+        private void ComparisonContext(int count, int repeat, string method, string phase)
+        {
+            activeRun = new SpatialFaceResizeRunContext { Scenario = Scenario(count), Pieces = count,
+                Repeat = repeat, Method = method, Phase = phase, Frame = -1,
+                FramesProcessed = Samples };
+        }
+
+        private RunResult Run(ConstructionWorld world, bool spatial, bool face,
+            SpatialFaceResizeRunContext progress)
         {
             var output = new RunResult();
             SnapSettings settings = ContinuousSnapWorkload.Settings();
             Stopwatch limit = Stopwatch.StartNew();
+            Debug.Log($"E2b.3 run begin: {progress.Describe()}, totalFrames={Samples}, " +
+                $"timeoutMinutes={SpatialFaceResizeRunContext.RunTimeoutMinutes}", this);
             for (int scenario = 0; scenario < ContinuousSnapWorkload.Cases; scenario++)
             {
                 PieceData initial = ContinuousSnapWorkload.Initial(scenario);
@@ -143,9 +220,13 @@ namespace Aedifica.Interaction
                 PieceId previousId = default;
                 for (int frame = 0; frame < ContinuousSnapWorkload.Frames; frame++)
                 {
-                    if (limit.Elapsed.TotalMinutes > 5d)
-                        throw new TimeoutException("Continuous snap run exceeded five minutes; workload was not reduced.");
                     int index = scenario * ContinuousSnapWorkload.Frames + frame;
+                    progress.Frame = index;
+                    progress.ElapsedSeconds = limit.Elapsed.TotalSeconds;
+                    if (SpatialFaceResizeRunContext.TimedOut(progress.ElapsedSeconds))
+                        throw new TimeoutException($"Individual Run exceeded " +
+                            $"{SpatialFaceResizeRunContext.RunTimeoutMinutes} minutes; workload was not reduced. " +
+                            progress.Describe());
                     PieceData raw = ContinuousSnapWorkload.Raw(initial, frame, face);
                     long start = Stopwatch.GetTimestamp();
                     IReadOnlyList<PieceData> candidates = spatial
@@ -163,8 +244,19 @@ namespace Aedifica.Interaction
                         Point = hit ? resolver.TargetPoint : default };
                     previousHit = hit;
                     previousId = hit ? resolver.TargetId : default;
+                    progress.FramesProcessed = index + 1;
+                    progress.ElapsedSeconds = limit.Elapsed.TotalSeconds;
+                    if (SpatialFaceResizeRunContext.TimedOut(progress.ElapsedSeconds))
+                        throw new TimeoutException($"Individual Run exceeded " +
+                            $"{SpatialFaceResizeRunContext.RunTimeoutMinutes} minutes; workload was not reduced. " +
+                            progress.Describe());
                 }
+                // One log per 24-frame trajectory, outside the per-frame stopwatch.
+                Debug.Log($"E2b.3 run progress: {progress.Describe()}, totalFrames={Samples}", this);
             }
+            progress.ElapsedSeconds = limit.Elapsed.TotalSeconds;
+            Debug.Log($"E2b.3 run complete: {progress.Describe()}, " +
+                $"durationSeconds={progress.ElapsedSeconds.ToString("F3", CultureInfo.InvariantCulture)}", this);
             return output;
         }
 
@@ -209,9 +301,11 @@ namespace Aedifica.Interaction
             Environment.GetEnvironmentVariable("AEDIFICA_COMMIT") ?? "unavailable", Application.unityVersion,
             Application.platform.ToString(), Application.isEditor ? "Editor" : "Player", SystemInfo.processorType,
             SystemInfo.graphicsDeviceName, SystemInfo.systemMemorySize.ToString(), count.ToString(), "unavailable",
-            repeat.ToString(), "failure", "0", "unavailable", "unavailable", "unavailable",
-            error.Message.Contains("frame=") ? "1" : "unavailable", "unavailable", "unavailable",
-            "unavailable", "unavailable", "failed", error.GetType().Name + ": " + error.Message);
+            repeat.ToString(), activeRun?.Method ?? "setup", "0", "unavailable", "unavailable", "unavailable",
+            SpatialFaceResizeRunContext.IsDivergence(activeRun?.Phase, error) ? "1" : "unavailable",
+            "unavailable", "unavailable",
+            "unavailable", "unavailable", "failed", (activeRun?.Describe() ?? "context=unavailable") +
+                ", exception=" + error.GetType().Name + ": " + error.Message);
 
         private void Append(params string[] fields)
         {
