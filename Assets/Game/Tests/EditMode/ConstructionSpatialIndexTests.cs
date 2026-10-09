@@ -96,7 +96,7 @@ namespace Aedifica.Tests.EditMode
             world.Update(near.Id, near.WithMaterial(LabMaterialIds.Stone));
             CollectionAssert.AreEquivalent(world.SpatialIndex.ChunksFor(near.Id), affected.Chunks);
             foreach (ChunkCoordinate distant in world.SpatialIndex.ChunksFor(far.Id))
-                Assert.That(affected.Chunks, Does.Not.Contain(distant));
+                CollectionAssert.DoesNotContain(affected.Chunks, distant);
             Assert.That(world.SpatialIndex.IndexedPieceCount, Is.EqualTo(world.Count));
         }
 
