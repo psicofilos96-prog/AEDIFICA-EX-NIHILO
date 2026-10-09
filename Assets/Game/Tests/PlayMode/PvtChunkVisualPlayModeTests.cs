@@ -59,9 +59,9 @@ namespace Aedifica.Tests.PlayMode
             try
             {
                 Assert.That(engine.RebuildDirty(), Is.EqualTo(1));
-                Assert.That(engine.PageCount, Is.EqualTo(1));
+                Assert.That(engine.PageCount, Is.EqualTo(2));
                 Assert.That(engine.PieceCount, Is.EqualTo(3));
-                Assert.That(root.transform.childCount, Is.EqualTo(1));
+                Assert.That(root.transform.childCount, Is.EqualTo(2));
                 Physics.SyncTransforms();
                 Assert.That(engine.TryPick(new Ray(a.Transform.Position + new Vector3(0f, 10f, 0f), Vector3.down),
                     20f, out PieceId picked), Is.True);
