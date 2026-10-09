@@ -1,0 +1,24 @@
+# E2b.1 — candidatos espaciais do snap geométrico
+
+## Auditoria e decisão
+
+`FreePiecePlacement.UpdatePosition` e `ConstructionLabInteraction.UpdateManipulation` passavam `lab.World.Pieces` a `SnapResolver.Resolve`. Em Move, cada chamada percorria todas as peças e coletava features de superfície, aresta e extremidade de cada alvo, mesmo quando a correção nunca poderia ficar dentro de `CaptureDistance` ou `ReleaseDistance`. Assim, o custo potencial por gesto crescia com todas as peças, além das alocações internas de coleta geométrica. A seleção por `Physics.RaycastAll` e a escolha de gizmos são caminhos separados e não foram modificados. `ConstructionLabInteraction.LogMissDiagnostics` ainda pode percorrer o mundo quando acionado pelo diagnóstico de seleção; não faz parte do caminho normal de snap.
+
+Em Move, qualquer correção aceita tem magnitude no máximo `ReleaseDistance`; portanto uma feature alvo válida deve estar no AABB da peça móvel expandido por essa distância. `SpatialSnapCandidates.ForMove` consulta o índice com esse AABB e uma margem conservadora de `0,001 m + 10⁻⁶ × maior coordenada absoluta do envelope` para fronteiras semiabertas e precisão float, converte IDs em `PieceData` com `ConstructionWorld.TryGet` e deixa `SnapResolver` aplicar exatamente os mesmos critérios, prioridade, desempate e retenção/liberação. A implementação depende da propriedade de que as features geradas por `SnapGeometry` estejam dentro do envelope `ConstructionChangeSet.WorldBounds` indexado; um teste percorre os tipos do catálogo e rotações 0°/45°/90° para verificar essa premissa. Peças grandes ou atravessando chunks entram pelo próprio AABB indexado.
+
+Face Resize continua recebendo `lab.World.Pieces`. O resolvedor trata separadamente o componente da correção ao longo do eixo e a distância perpendicular; o código atual também aplica um limite de distância total para captura/retenção. Esta etapa não altera nem presume equivalência de uma nova região de busca para essa combinação de regras. Nenhuma semântica de `ConstructionSpatialIndex.Query`, de `SnapResolver` ou da física foi alterada. O índice reduz a **seleção de candidatos** em Move, mas cenas muito densas ainda podem retornar muitos IDs e gastar tempo em `SnapGeometry.Collect`; esse custo requer medição antes de outra mudança.
+
+## Benchmark separado da E2a
+
+O `SpatialSnapBenchmarkRunner` gera mundos lógicos com seed 2202 e 1.000/10.000/50.000 peças da E2a, sem GameObjects por peça. Executa aquecimento, três repetições por tamanho e 128 amostras por método. Compara `SnapResolver` com a varredura completa e com candidatos espaciais, alternando a ordem dos lotes entre repetições. Antes de aceitar cada repetição, compara transformação, dimensão, presença de alvo, `PieceId` e tipo de feature em todas as amostras; qualquer divergência grava `failed`. O CSV registra candidatos médios/mínimos/máximos, total, média e p50/p95/p99 por resolução, heap antes/depois e bytes alocados pela thread quando a API estiver disponível. Os percentis usam nearest-rank. Os tempos incluem a obtenção de candidatos e a resolução geométrica; excluem a criação do mundo e a escrita CSV. As amostras reiniciam o lock do resolver para isolar a resolução de um único gesto; testes específicos cobrem a retenção entre gestos.
+
+O benchmark interrompe sem reduzir a carga se a RAM nominal for menor que 8 GB, o heap gerenciado exceder 1,5 GB ou um lote ultrapassar cinco minutos. Pausas de GC, ordem dos lotes, temperatura e perfil de energia continuam influenciando medições. Alocações de thread são `unavailable` quando a API não existir. Nenhum FPS é inferido.
+
+## Execução local no Lenovo LOQ
+
+1. Após autorização separada para publicar a branch, confirmar o SHA e working tree no Windows. Abrir no Unity 6000.6.4f1, URP 17.6.0 e executar todas as suítes EditMode e PlayMode.
+2. Selecionar **Tools > Aedifica > E2b.1 > Create Spatial Snap Benchmark Scene**. O comando cria localmente `Assets/Game/Scenes/SpatialSnapBenchmark.unity` e a insere como primeira cena habilitada no Build Settings, sem versioná-la automaticamente. Não sobrescreve uma cena preexistente. Gerar build Windows x64.
+3. No PowerShell, dentro do repositório, executar `$env:AEDIFICA_COMMIT = (git rev-parse HEAD).Trim()` e iniciar o executável pelo mesmo PowerShell. Aguardar `E2b.1 snap benchmark complete` ou uma linha `failed` no Console/Player log.
+4. Arquivar o CSV `aedifica_E2b1_snap_*.csv` de `Application.persistentDataPath` (normalmente `%USERPROFILE%\AppData\LocalLow\DefaultCompany\AEDIFICA-EX-NIHILO`) junto com o Player log. Verificar seis linhas `ok` por cenário (dois métodos × três repetições), contagem de peças, candidatos, hardware, versão Unity e commit. Não declarar ganho sem os resultados reais do Player e a equivalência funcional confirmada.
+
+Nenhuma medição de tempo, alocação ou FPS foi executada neste ambiente remoto sem Unity Editor.

@@ -107,7 +107,8 @@ namespace Aedifica.Interaction
                 {
                     var moveSession = new ManipulationSession(candidate, ManipulationMode.Move, ManipulationAxis.X,
                         Vector2.zero, Vector2.right, 1f);
-                    candidate = resolver.Resolve(candidate, moveSession, snapping, lab.World.Pieces);
+                    candidate = resolver.Resolve(candidate, moveSession, snapping,
+                        SpatialSnapCandidates.ForMove(lab.World, candidate, snapping));
                 }
                 else resolver.Reset();
                 position = candidate.Transform.Position;

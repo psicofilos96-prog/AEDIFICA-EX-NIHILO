@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Aedifica.Construction;
 using Aedifica.Interaction.Camera;
 using Aedifica.Rendering;
@@ -652,7 +653,10 @@ namespace Aedifica.Interaction
             if (snapSettings.HasGeometricSnap && (session.Mode == ManipulationMode.Move ||
                 session.Mode == ManipulationMode.Resize && session.ResizeBehavior == ResizeMode.Face))
             {
-                changed = geometricSnap.Resolve(changed, session, snapSettings, lab.World.Pieces);
+                IEnumerable<PieceData> candidates = session.Mode == ManipulationMode.Move
+                    ? SpatialSnapCandidates.ForMove(lab.World, changed, snapSettings)
+                    : lab.World.Pieces; // Keep Face Resize on its original candidate path.
+                changed = geometricSnap.Resolve(changed, session, snapSettings, candidates);
                 if (geometricSnap.HasTarget)
                 {
                     Vector3 marker = geometricSnap.TargetPoint;
