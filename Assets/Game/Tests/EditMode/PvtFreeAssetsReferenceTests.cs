@@ -13,12 +13,12 @@ namespace Aedifica.Tests.EditMode
         {
             List<PieceData> first=PvtVisualCityScenario.BuildReferenceResidence();
             List<PieceData> again=PvtVisualCityScenario.BuildReferenceResidence();
-            Assert.That(first.Count,Is.GreaterThan(20));
+            Assert.That(first.Count,Is.GreaterThan(10));
             Assert.That(first.Count,Is.LessThan(150),"This art gate contains exactly one residence.");
             Assert.That(again.Count,Is.EqualTo(first.Count));
             var ids=new HashSet<PieceId>();
             var world=new ConstructionWorld();
-            int walls=0,roofs=0,openings=0,doorLeaves=0;
+            int walls=0,roofs=0,openings=0,doorLeaves=0,finishes=0;
             for (int i=0;i<first.Count;i++)
             {
                 PieceData piece=first[i];
@@ -26,6 +26,7 @@ namespace Aedifica.Tests.EditMode
                 Assert.That(again[i].Id,Is.EqualTo(piece.Id));
                 Assert.That(again[i].Transform,Is.EqualTo(piece.Transform));
                 Assert.That(world.Create(piece).Changed,Is.True);
+                finishes+=piece.Finishes.Count;
                 if (piece.Type==PieceType.Wall) { walls++;openings+=piece.Openings.Count; }
                 if (piece.Dimensions.IsSlopedRoof) roofs++;
                 if (piece.Type==PieceType.Block && piece.MaterialId==PvtFinalScenario.Wood &&
@@ -36,6 +37,7 @@ namespace Aedifica.Tests.EditMode
             Assert.That(roofs,Is.EqualTo(1));
             Assert.That(openings,Is.GreaterThanOrEqualTo(5));
             Assert.That(doorLeaves,Is.EqualTo(1));
+            Assert.That(finishes,Is.GreaterThanOrEqualTo(15));
         }
     }
 }

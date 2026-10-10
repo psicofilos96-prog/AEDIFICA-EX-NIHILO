@@ -26,6 +26,14 @@ namespace Aedifica.Rendering
             public readonly List<Page> Pages = new List<Page>();
         }
 
+        private readonly struct VisualPart
+        {
+            public readonly PieceData Owner;
+            public readonly BlockGeometry Geometry;
+            public VisualPart(PieceData owner,BlockGeometry geometry)
+            { Owner=owner;Geometry=geometry; }
+        }
+
         private readonly ConstructionWorld world;
         private readonly MaterialRegistry materials;
         private readonly Transform parent;
@@ -190,22 +198,29 @@ namespace Aedifica.Rendering
                 {
                     var ordered = new List<PieceId>(region.Ids);
                     ordered.Sort();
-                    var groups = new SortedDictionary<string, List<PieceData>>(StringComparer.Ordinal);
+                    var groups = new SortedDictionary<string, List<VisualPart>>(StringComparer.Ordinal);
                     var materialByKey = new Dictionary<string, Material>();
                     foreach (PieceId id in ordered)
                     {
                         if (extracted.Contains(id)) continue;
                         if (!world.TryGet(id, out PieceData piece)) throw new InvalidOperationException("Missing logical piece.");
-                        string key = piece.MaterialId.ToString();
-                        if (!groups.TryGetValue(key, out List<PieceData> group))
-                        {
-                            groups.Add(key, group = new List<PieceData>());
-                            materialByKey.Add(key, materials.Resolve(piece.MaterialId));
-                        }
-                        group.Add(piece);
+                        AddPart(piece, piece.MaterialId, Geometry(piece));
+                        foreach (FinishSegment finish in ArchitecturalFinishGeometry.Generate(piece))
+                            AddPart(piece,finish.MaterialId,finish.Geometry);
                     }
-                    foreach (KeyValuePair<string, List<PieceData>> group in groups)
+                    foreach (KeyValuePair<string, List<VisualPart>> group in groups)
                         BuildGroup(coordinate, group.Value, materialByKey[group.Key], replacement);
+
+                    void AddPart(PieceData piece,MaterialId materialId,BlockGeometry geometry)
+                    {
+                        string key=materialId.ToString();
+                        if (!groups.TryGetValue(key,out List<VisualPart> group))
+                        {
+                            groups.Add(key,group=new List<VisualPart>());
+                            materialByKey.Add(key,materials.Resolve(materialId));
+                        }
+                        group.Add(new VisualPart(piece,geometry));
+                    }
                 }
             }
             catch
@@ -231,7 +246,7 @@ namespace Aedifica.Rendering
             if (region.Ids.Count == 0) regions.Remove(coordinate);
         }
 
-        private void BuildGroup(ChunkCoordinate coordinate, List<PieceData> group, Material material, List<Page> output)
+        private void BuildGroup(ChunkCoordinate coordinate, List<VisualPart> group, Material material, List<Page> output)
         {
             int initialCapacity = Math.Min(maxVertices, 1024);
             var vertices = new List<Vector3>(initialCapacity);
@@ -239,9 +254,10 @@ namespace Aedifica.Rendering
             var uvs = new List<Vector2>(initialCapacity);
             var triangles = new List<int>(initialCapacity * 2);
             var ownerIds = new List<PieceId>(initialCapacity);
-            foreach (PieceData piece in group)
+            foreach (VisualPart part in group)
             {
-                BlockGeometry geometry = Geometry(piece);
+                PieceData piece=part.Owner;
+                BlockGeometry geometry=part.Geometry;
                 if (vertices.Count > 0 && vertices.Count + geometry.Vertices.Length > maxVertices)
                 {
                     output.Add(BuildPage(coordinate, material, vertices, normals, uvs, triangles, ownerIds));

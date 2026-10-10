@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Aedifica.Construction;
 using Aedifica.Geometry;
 using UnityEngine;
@@ -15,6 +16,9 @@ namespace Aedifica.Rendering
         private MaterialRegistry materialRegistry;
         private bool materialAssigned;
         private Mesh ownedMesh;
+        private readonly List<Mesh> finishMeshes=new List<Mesh>();
+        private readonly List<GameObject> finishObjects=new List<GameObject>();
+        private bool selectedState;
         private MeshFilter meshFilter;
         private MeshRenderer meshRenderer;
         private BoxCollider boxCollider;
@@ -67,6 +71,7 @@ namespace Aedifica.Rendering
                         ? CirculationGeometryGenerator.Generate(piece.Dimensions)
                         : BlockGeometryGenerator.GeneratePiece(piece.Dimensions));
                 meshFilter.sharedMesh = replacement;
+                RefreshFinishes(piece);
                 if (NeedsMeshCollider(piece))
                 {
                     if (roofCollider == null) roofCollider = gameObject.AddComponent<MeshCollider>();
@@ -98,7 +103,10 @@ namespace Aedifica.Rendering
 
         private bool SameGeometry(PieceData piece)
         {
-            if (!dimensions.Equals(piece.Dimensions) || geometryPiece.Openings.Count != piece.Openings.Count) return false;
+            if (!dimensions.Equals(piece.Dimensions) || geometryPiece.Openings.Count != piece.Openings.Count ||
+                geometryPiece.Finishes.Count != piece.Finishes.Count) return false;
+            for (int i=0;i<piece.Finishes.Count;i++)
+                if (!geometryPiece.Finishes[i].Equals(piece.Finishes[i])) return false;
             for (int i = 0; i < piece.Openings.Count; i++)
             {
                 WallOpening before = geometryPiece.Openings[i];
@@ -109,15 +117,42 @@ namespace Aedifica.Rendering
             return true;
         }
 
+        private void RefreshFinishes(PieceData piece)
+        {
+            ClearFinishes();
+            foreach (FinishSegment part in ArchitecturalFinishGeometry.Generate(piece))
+            {
+                var child=new GameObject("Linked finish "+part.FinishId);
+                child.transform.SetParent(transform,false);
+                Mesh mesh=BlockMeshFactory.Build(part.Geometry);
+                child.AddComponent<MeshFilter>().sharedMesh=mesh;
+                MeshRenderer renderer=child.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial=materialRegistry.Resolve(part.MaterialId);
+                renderer.SetPropertyBlock(selectedState ? propertyBlock : null);
+                finishMeshes.Add(mesh);finishObjects.Add(child);
+            }
+        }
+
+        private void ClearFinishes()
+        {
+            foreach (GameObject child in finishObjects) if (child!=null) Destroy(child);
+            foreach (Mesh mesh in finishMeshes) if (mesh!=null) Destroy(mesh);
+            finishObjects.Clear();finishMeshes.Clear();
+        }
+
         public void SetSelected(bool selected)
         {
+            selectedState=selected;
             propertyBlock.SetColor("_BaseColor", selected ? new Color(1f, 0.75f, 0.25f) : Color.white);
             meshRenderer.SetPropertyBlock(selected ? propertyBlock : null);
+            foreach (GameObject child in finishObjects)
+                if (child!=null) child.GetComponent<MeshRenderer>().SetPropertyBlock(selected ? propertyBlock : null);
         }
 
         private void OnDestroy()
         {
             if (ownedMesh != null) Destroy(ownedMesh);
+            ClearFinishes();
         }
     }
 }

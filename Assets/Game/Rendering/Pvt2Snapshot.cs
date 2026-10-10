@@ -10,7 +10,7 @@ namespace Aedifica.Rendering
     public static class Pvt2Snapshot
     {
         private const int Magic = 0x32545650; // PVT2
-        private const int Version = 1;
+        private const int Version = 2;
         private const int MaximumPieces = 100000;
 
         public static byte[] Serialize(ConstructionWorld world)
@@ -40,6 +40,16 @@ namespace Aedifica.Rendering
                         writer.Write(opening.Left); writer.Write(opening.Bottom);
                         writer.Write(opening.Width); writer.Write(opening.Height);
                     }
+                    writer.Write(piece.Finishes.Count);
+                    foreach (ArchitecturalFinish finish in piece.Finishes)
+                    {
+                        writer.Write(finish.Id.ToString("N"));
+                        writer.Write(finish.HostId.ToString());
+                        writer.Write(finish.OpeningId.ToString("N"));
+                        writer.Write((int)finish.Kind);
+                        writer.Write(finish.MaterialId.ToString());
+                        writer.Write(finish.Profile);writer.Write(finish.Projection);
+                    }
                 }
                 writer.Flush();
                 return stream.ToArray();
@@ -52,8 +62,11 @@ namespace Aedifica.Rendering
             using (var stream = new MemoryStream(bytes, false))
             using (var reader = new BinaryReader(stream))
             {
-                if (reader.ReadInt32() != Magic || reader.ReadInt32() != Version)
+                if (reader.ReadInt32() != Magic)
                     throw new InvalidDataException("Unsupported PVT-2 snapshot header.");
+                int version=reader.ReadInt32();
+                if (version!=1 && version!=Version)
+                    throw new InvalidDataException("Unsupported PVT-2 snapshot version.");
                 int count = reader.ReadInt32();
                 if (count < 0 || count > MaximumPieces) throw new InvalidDataException("Invalid piece count.");
                 var world = new ConstructionWorld();
@@ -74,6 +87,19 @@ namespace Aedifica.Rendering
                             (WallOpeningKind)reader.ReadInt32(), reader.ReadSingle(), reader.ReadSingle(),
                             reader.ReadSingle(), reader.ReadSingle());
                         piece = piece.WithOpening(opening);
+                    }
+                    if (version>=2)
+                    {
+                        int finishes=reader.ReadInt32();
+                        if (finishes<0 || finishes>1000) throw new InvalidDataException("Invalid finish count.");
+                        for (int j=0;j<finishes;j++)
+                        {
+                            var finish=new ArchitecturalFinish(Guid.Parse(reader.ReadString()),
+                                PieceId.Parse(reader.ReadString()),Guid.Parse(reader.ReadString()),
+                                (ArchitecturalFinishKind)reader.ReadInt32(),
+                                MaterialId.Parse(reader.ReadString()),reader.ReadSingle(),reader.ReadSingle());
+                            piece=piece.WithFinish(finish);
+                        }
                     }
                     if (!world.Create(piece).Changed) throw new InvalidDataException("Duplicate PieceId.");
                 }
@@ -107,6 +133,7 @@ namespace Aedifica.Rendering
                 if (prior.Type != actual.Type || !prior.Transform.Position.Equals(actual.Transform.Position) ||
                     !prior.Dimensions.Equals(actual.Dimensions) || prior.MaterialId != actual.MaterialId ||
                     prior.Openings.Count != actual.Openings.Count ||
+                    prior.Finishes.Count != actual.Finishes.Count ||
                     Vector3.Distance(prior.Transform.Rotation * Vector3.forward,
                         actual.Transform.Rotation * Vector3.forward) > 0.000001f ||
                     Vector3.Distance(prior.Transform.Rotation * Vector3.right,
@@ -114,6 +141,8 @@ namespace Aedifica.Rendering
                     world.SpatialIndex.ChunksFor(item.Key).Count == 0) return false;
                 for (int i = 0; i < prior.Openings.Count; i++)
                     if (!prior.Openings[i].Equals(actual.Openings[i])) return false;
+                for (int i = 0; i < prior.Finishes.Count; i++)
+                    if (!prior.Finishes[i].Equals(actual.Finishes[i])) return false;
             }
             return true;
         }

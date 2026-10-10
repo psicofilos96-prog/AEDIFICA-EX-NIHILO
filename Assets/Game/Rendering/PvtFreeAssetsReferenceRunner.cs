@@ -9,7 +9,7 @@ namespace Aedifica.Rendering
     // One residence; all architectural edits go through ConstructionCommandHistory.
     public sealed class PvtFreeAssetsReferenceRunner : MonoBehaviour
     {
-        private static readonly string[] Views={"facade","materials","street","landscape"};
+        private static readonly string[] Views={"finished facade","door/window/eave detail","street","landscape"};
         [SerializeField] private Camera sceneCamera;
         [SerializeField] private Material stone,brick,wood,plaster,roof,road,terrain,glass;
         [SerializeField] private Texture2D dryAlbedo,dryNormal,dryMask,groundAlbedo,groundNormal,groundMask;
@@ -77,7 +77,7 @@ namespace Aedifica.Rendering
         private void OnGUI()
         {
             if (!enabled || hideUi || engine==null) return;
-            GUILayout.BeginArea(new Rect(12,12,Mathf.Min(Screen.width-24,900),112),GUI.skin.box);
+            GUILayout.BeginArea(new Rect(12,12,Mathf.Min(Screen.width-24,1060),151),GUI.skin.box);
             GUILayout.BeginHorizontal();
             for (int i=0;i<Views.Length;i++)
             { int index=i;if (GUILayout.Button(Views[i])) PositionCamera(index); }
@@ -97,10 +97,23 @@ namespace Aedifica.Rendering
             if (GUILayout.Button("Save")) Save();
             if (GUILayout.Button("Load")) Load();
             GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Add door frame")) AddFinish(ArchitecturalFinishKind.DoorFrame);
+            if (GUILayout.Button("Add window frame")) AddFinish(ArchitecturalFinishKind.WindowFrameSill);
+            if (GUILayout.Button("Add lintel")) AddFinish(ArchitecturalFinishKind.Lintel);
+            if (GUILayout.Button("Add roof eave")) AddFinish(ArchitecturalFinishKind.RoofEave);
+            if (GUILayout.Button("Remove last finish")) ModifySelected(piece=>piece.Finishes.Count==0
+                ? throw new InvalidOperationException("Selected piece has no finish.")
+                : piece.WithoutFinish(piece.Finishes[piece.Finishes.Count-1].Id));
+            if (GUILayout.Button("Opening +0.1m")) ModifySelected(piece=>piece.Openings.Count==0
+                ? throw new InvalidOperationException("Selected wall has no opening.")
+                : piece.ReplaceOpening(piece.Openings[0].WithRect(piece.Openings[0].Left,
+                    piece.Openings[0].Bottom,piece.Openings[0].Width+0.1f,piece.Openings[0].Height)));
+            GUILayout.EndHorizontal();
             GUILayout.Label($"Pieces {world.Count} | selected {(hasSelection ? selected.ToString() : "none")} | {message}");
             GUILayout.EndArea();
             Event evt=Event.current;
-            if (evt.type==EventType.MouseDown && evt.button==0 && evt.mousePosition.y>126f)
+            if (evt.type==EventType.MouseDown && evt.button==0 && evt.mousePosition.y>166f)
             {
                 Ray ray=sceneCamera.ScreenPointToRay(new Vector3(evt.mousePosition.x,
                     Screen.height-evt.mousePosition.y,0f));
@@ -121,6 +134,40 @@ namespace Aedifica.Rendering
             try { if (history.Update(selected,change(prior)).Changed) Rebuild(); }
             catch (Exception error) { message=error.Message;Debug.LogWarning(error.Message,this); }
         }
+        private void AddFinish(ArchitecturalFinishKind kind)
+        {
+            ModifySelected(piece=>
+            {
+                Guid openingId=Guid.Empty;
+                if (kind==ArchitecturalFinishKind.RoofEave)
+                {
+                    if (!piece.Dimensions.IsRoof)
+                        throw new InvalidOperationException("Select a roof for a linked eave.");
+                }
+                else
+                {
+                    if (piece.Type!=PieceType.Wall)
+                        throw new InvalidOperationException("Select a wall for an opening finish.");
+                    foreach (WallOpening opening in piece.Openings)
+                    {
+                        if (kind==ArchitecturalFinishKind.DoorFrame && opening.Kind!=WallOpeningKind.Passage ||
+                            kind==ArchitecturalFinishKind.WindowFrameSill && opening.Kind!=WallOpeningKind.Window)
+                            continue;
+                        bool already=false;
+                        foreach (ArchitecturalFinish existing in piece.Finishes)
+                            if (existing.OpeningId==opening.Id && existing.Kind==kind) { already=true;break; }
+                        if (!already) { openingId=opening.Id;break; }
+                    }
+                    if (openingId==Guid.Empty)
+                        throw new InvalidOperationException("No compatible unframed opening remains.");
+                }
+                MaterialId material=kind==ArchitecturalFinishKind.RoofEave
+                    ? PvtFinalScenario.Wood : LabMaterialIds.Stone;
+                return piece.WithFinish(new ArchitecturalFinish(Guid.NewGuid(),piece.Id,
+                    openingId,kind,material));
+            });
+        }
+
         private void AddBlock()
         {
             Vector3 p=sceneCamera.transform.position+sceneCamera.transform.forward*8f;

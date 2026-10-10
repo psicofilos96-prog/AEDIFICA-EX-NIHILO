@@ -15,6 +15,11 @@ namespace Aedifica.Construction
         private readonly WallOpening[] openings;
         private readonly IReadOnlyList<WallOpening> readOnlyOpenings;
         public IReadOnlyList<WallOpening> Openings => readOnlyOpenings;
+        private static readonly ArchitecturalFinish[] EmptyFinishes = Array.Empty<ArchitecturalFinish>();
+        private static readonly IReadOnlyList<ArchitecturalFinish> EmptyFinishView = Array.AsReadOnly(EmptyFinishes);
+        private readonly ArchitecturalFinish[] finishes;
+        private readonly IReadOnlyList<ArchitecturalFinish> readOnlyFinishes;
+        public IReadOnlyList<ArchitecturalFinish> Finishes => readOnlyFinishes;
         public BlockDimensions BlockDimensions => Dimensions.AsBlock();
         public WallDimensions WallDimensions => Dimensions.AsWall();
         public SlabDimensions SlabDimensions => Dimensions.AsSlab();
@@ -76,10 +81,12 @@ namespace Aedifica.Construction
             : this(id, transform, dimensions, LabMaterialIds.Neutral) { }
 
         public PieceData(PieceId id, PieceTransform transform, PieceDimensions dimensions, MaterialId materialId)
-            : this(id, transform, dimensions, materialId, EmptyOpenings) { }
+            : this(id, transform, dimensions, materialId, EmptyOpenings, EmptyFinishes) { }
 
         private PieceData(PieceId id, PieceTransform transform, PieceDimensions dimensions,
-            MaterialId materialId, WallOpening[] wallOpenings, IReadOnlyList<WallOpening> existingView = null)
+            MaterialId materialId, WallOpening[] wallOpenings, ArchitecturalFinish[] finishData,
+            IReadOnlyList<WallOpening> existingView = null,
+            IReadOnlyList<ArchitecturalFinish> existingFinishView = null)
         {
             if (!id.IsValid) throw new ArgumentException("A piece must have a valid ID.", nameof(id));
             if (!transform.IsValid) throw new ArgumentException("A piece must have a valid transform.", nameof(transform));
@@ -90,17 +97,20 @@ namespace Aedifica.Construction
             Dimensions = dimensions;
             MaterialId = materialId;
             WallOpeningLayout.Validate(id, dimensions, wallOpenings);
+            ValidateFinishes(id, dimensions, wallOpenings, finishData);
             openings = wallOpenings;
+            finishes = finishData;
+            readOnlyFinishes = existingFinishView ?? (finishes.Length == 0 ? EmptyFinishView : Array.AsReadOnly(finishes));
             readOnlyOpenings = existingView ?? (openings.Length == 0 ? EmptyOpeningView : Array.AsReadOnly(openings));
         }
 
-        public PieceData WithTransform(PieceTransform transform) => new PieceData(Id, transform, Dimensions, MaterialId, openings, readOnlyOpenings);
+        public PieceData WithTransform(PieceTransform transform) => new PieceData(Id, transform, Dimensions, MaterialId, openings, finishes, readOnlyOpenings, readOnlyFinishes);
         public PieceData WithDimensions(PieceDimensions dimensions)
         {
             if (dimensions.Type != Type) throw new ArgumentException("Replacement parameters must preserve piece type.", nameof(dimensions));
-            return new PieceData(Id, Transform, dimensions, MaterialId, openings, readOnlyOpenings);
+            return new PieceData(Id, Transform, dimensions, MaterialId, openings, finishes, readOnlyOpenings, readOnlyFinishes);
         }
-        public PieceData WithMaterial(MaterialId materialId) => new PieceData(Id, Transform, Dimensions, materialId, openings, readOnlyOpenings);
+        public PieceData WithMaterial(MaterialId materialId) => new PieceData(Id, Transform, Dimensions, materialId, openings, finishes, readOnlyOpenings, readOnlyFinishes);
         public float MinimumResizeDimension(int axis)
         {
             float minimum = Dimensions.MinimumForAxis(axis);
@@ -120,7 +130,7 @@ namespace Aedifica.Construction
             var changed = new WallOpening[openings.Length + 1];
             Array.Copy(openings, changed, openings.Length);
             changed[openings.Length] = opening;
-            return new PieceData(Id, Transform, Dimensions, MaterialId, changed);
+            return new PieceData(Id, Transform, Dimensions, MaterialId, changed, finishes);
         }
 
         public PieceData ReplaceOpening(WallOpening opening)
@@ -130,7 +140,7 @@ namespace Aedifica.Construction
                 if (changed[i].Id == opening.Id)
                 {
                     changed[i] = opening;
-                    return new PieceData(Id, Transform, Dimensions, MaterialId, changed);
+                    return new PieceData(Id, Transform, Dimensions, MaterialId, changed, finishes);
                 }
             throw new ArgumentException("Opening ID is not in this wall.", nameof(opening));
         }
@@ -142,7 +152,66 @@ namespace Aedifica.Construction
             var changed = new WallOpening[openings.Length - 1];
             if (index > 0) Array.Copy(openings, 0, changed, 0, index);
             if (index < changed.Length) Array.Copy(openings, index + 1, changed, index, changed.Length - index);
-            return new PieceData(Id, Transform, Dimensions, MaterialId, changed);
+            var retained = new List<ArchitecturalFinish>(finishes.Length);
+            foreach (ArchitecturalFinish finish in finishes)
+                if (finish.OpeningId != openingId) retained.Add(finish);
+            return new PieceData(Id, Transform, Dimensions, MaterialId, changed, retained.ToArray());
+        }
+
+        public PieceData WithFinish(ArchitecturalFinish finish)
+        {
+            var changed = new ArchitecturalFinish[finishes.Length+1];
+            Array.Copy(finishes,changed,finishes.Length);
+            changed[finishes.Length]=finish;
+            return new PieceData(Id,Transform,Dimensions,MaterialId,openings,changed,readOnlyOpenings);
+        }
+
+        public PieceData WithoutFinish(Guid finishId)
+        {
+            int index=Array.FindIndex(finishes,item=>item.Id==finishId);
+            if (index<0) throw new ArgumentException("Finish ID is not in this piece.",nameof(finishId));
+            var changed=new ArchitecturalFinish[finishes.Length-1];
+            if (index>0) Array.Copy(finishes,0,changed,0,index);
+            if (index<changed.Length) Array.Copy(finishes,index+1,changed,index,changed.Length-index);
+            return new PieceData(Id,Transform,Dimensions,MaterialId,openings,changed,readOnlyOpenings);
+        }
+
+        private static void ValidateFinishes(PieceId id,PieceDimensions dimensions,
+            WallOpening[] openings,ArchitecturalFinish[] finishData)
+        {
+            for (int i=0;i<finishData.Length;i++)
+            {
+                ArchitecturalFinish finish=finishData[i];
+                if (finish.HostId!=id || finish.Id==Guid.Empty || !finish.MaterialId.IsValid)
+                    throw new ArgumentException("Finish host or identity is invalid.",nameof(finishData));
+                for (int j=0;j<i;j++)
+                    if (finishData[j].Id==finish.Id ||
+                        finishData[j].OpeningId==finish.OpeningId && finishData[j].Kind==finish.Kind)
+                        throw new ArgumentException("Duplicate finish identity or host feature.",nameof(finishData));
+                if (finish.Kind==ArchitecturalFinishKind.RoofEave)
+                {
+                    if (!dimensions.IsRoof || finish.OpeningId!=Guid.Empty)
+                        throw new ArgumentException("Roof eave needs a roof host.",nameof(finishData));
+                    continue;
+                }
+                if (dimensions.Type!=PieceType.Wall)
+                    throw new ArgumentException("Opening finish needs a wall host.",nameof(finishData));
+                bool found=false;
+                foreach (WallOpening opening in openings)
+                    if (opening.Id==finish.OpeningId)
+                    {
+                        found=true;
+                        if (finish.Kind==ArchitecturalFinishKind.DoorFrame && opening.Kind!=WallOpeningKind.Passage ||
+                            finish.Kind==ArchitecturalFinishKind.WindowFrameSill && opening.Kind!=WallOpeningKind.Window)
+                            throw new ArgumentException("Finish kind does not match opening.",nameof(finishData));
+                        if (finish.Kind!=ArchitecturalFinishKind.Lintel &&
+                            (opening.Width-2f*finish.Profile<0.05f ||
+                             opening.Height-2f*finish.Profile<0.05f))
+                            throw new ArgumentException("Opening is too small for finish profile.",nameof(finishData));
+                        break;
+                    }
+                if (!found) throw new ArgumentException("Finish opening is absent from host.",nameof(finishData));
+            }
         }
 
         public PieceData WithBlockDimensions(BlockDimensions dimensions) => WithDimensions(new PieceDimensions(dimensions));

@@ -44,7 +44,14 @@ namespace Aedifica.Construction
                 Mathf.Abs(x.y) + Mathf.Abs(y.y) + Mathf.Abs(z.y),
                 Mathf.Abs(x.z) + Mathf.Abs(y.z) + Mathf.Abs(z.z));
             Vector3 center = piece.Transform.Position + rotation * new Vector3(0f, localExtents.y, 0f);
-            return new Bounds(center, extents * 2f);
+            var bounds=new Bounds(center,extents*2f);
+            if (piece.Finishes.Count>0)
+            {
+                // Maximum profile/projection reach is 0.6 m; keep linked visuals
+                // inside spatial invalidation even at chunk boundaries.
+                bounds.Expand(1.2f);
+            }
+            return bounds;
         }
     }
 }

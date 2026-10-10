@@ -45,13 +45,13 @@ namespace Aedifica.Rendering
         public static List<PieceData> BuildReferenceResidence()
         {
             var pieces=new List<PieceData>();
-            AddHouse(pieces,1,new Plot(0,0f,0f,0f));
+            AddHouse(pieces,1,new Plot(0,0f,0f,0f),true);
             return pieces;
         }
 
         // Authored wall joints, openings and eaves replace the benchmark's repeated
         // detail recipe. The styles live only in this review scenario, not the engine.
-        private static void AddHouse(List<PieceData> pieces,int building,Plot plot)
+        private static void AddHouse(List<PieceData> pieces,int building,Plot plot,bool linkedFinishes=false)
         {
             float width=plot.Style==0 ? 7.6f+(building%3)*0.4f :
                 plot.Style==1 ? 8.4f : 9.2f;
@@ -116,8 +116,22 @@ namespace Aedifica.Rendering
                     }
                     else Opening(WallOpeningKind.Window,(length-1.25f)*0.5f,
                         1.2f,1.25f,1.35f);
+                    if (linkedFinishes)
+                    {
+                        int finishIndex=0;
+                        foreach (WallOpening opening in wall.Openings)
+                        {
+                            ArchitecturalFinishKind frame=opening.Kind==WallOpeningKind.Passage
+                                ? ArchitecturalFinishKind.DoorFrame
+                                : ArchitecturalFinishKind.WindowFrameSill;
+                            wall=wall.WithFinish(new ArchitecturalFinish(FinishId(building,thisWall,finishIndex++),
+                                wall.Id,opening.Id,frame,LabMaterialIds.Stone));
+                            wall=wall.WithFinish(new ArchitecturalFinish(FinishId(building,thisWall,finishIndex++),
+                                wall.Id,opening.Id,ArchitecturalFinishKind.Lintel,LabMaterialIds.Stone));
+                        }
+                    }
                     pieces.Add(wall);
-                    AddOpeningFrames(pieces,wall,building,thisWall);
+                    if (!linkedFinishes) AddOpeningFrames(pieces,wall,building,thisWall);
                     if (front && floor==0)
                     {
                         // A paneled timber leaf fills the passage, so the street
@@ -142,7 +156,14 @@ namespace Aedifica.Rendering
                     width+2f*eave,depth+2f*eave,0.32f,1.5f)) :
                     new PieceDimensions(new ShedRoofDimensions(
                         width+2f*eave,depth+2f*eave,0.32f,1.25f));
-            Add(At(0f,roofBase,0f),roof,PvtFinalScenario.Ceramic);
+            if (linkedFinishes)
+            {
+                PieceId roofId=DetailId(building,20000+part++);
+                pieces.Add(new PieceData(roofId,At(0f,roofBase,0f),roof,PvtFinalScenario.Ceramic)
+                    .WithFinish(new ArchitecturalFinish(FinishId(building,100,0),roofId,Guid.Empty,
+                        ArchitecturalFinishKind.RoofEave,PvtFinalScenario.Wood)));
+            }
+            else Add(At(0f,roofBase,0f),roof,PvtFinalScenario.Ceramic);
             if (building%3==0)
             {
                 // Masonry courses close the gable ends beneath the pitched roof.
@@ -156,7 +177,7 @@ namespace Aedifica.Rendering
                             depth*(1f-(course+0.25f)/courses),courseHeight+0.07f,
                             wallThickness)),masonry);
             }
-            for (int side=-1;side<=1;side+=2)
+            if (!linkedFinishes) for (int side=-1;side<=1;side+=2)
             {
                 Add(At(0f,roofBase-0.28f,side*(depth*0.5f+eave-0.09f)),
                     new PieceDimensions(new BeamDimensions(width+2f*eave,0.3f,0.18f)),
@@ -260,6 +281,10 @@ namespace Aedifica.Rendering
                     new SlabDimensions(1.8f,0.28f,3.4f)),LabMaterialIds.Stone);
             }
         }
+
+        private static Guid FinishId(int building,int host,int part) =>
+            new Guid(Seed+2,(short)building,(short)host,
+                0x46,0x49,0x4e,0x49,0x53,0x48,0,(byte)part);
 
         private static PieceId DetailId(int building,int part) => PieceId.Parse(
             new Guid(Seed+1,(short)building,(short)part,

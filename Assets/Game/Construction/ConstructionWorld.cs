@@ -72,9 +72,12 @@ namespace Aedifica.Construction
         {
             if (a == null || b == null || a.Id != b.Id || a.Type != b.Type ||
                 !a.Transform.Equals(b.Transform) || !a.Dimensions.Equals(b.Dimensions) ||
-                a.MaterialId != b.MaterialId || a.Openings.Count != b.Openings.Count) return false;
+                a.MaterialId != b.MaterialId || a.Openings.Count != b.Openings.Count ||
+                a.Finishes.Count != b.Finishes.Count) return false;
             for (int i = 0; i < a.Openings.Count; i++)
                 if (!a.Openings[i].Equals(b.Openings[i])) return false;
+            for (int i = 0; i < a.Finishes.Count; i++)
+                if (!a.Finishes[i].Equals(b.Finishes[i])) return false;
             return true;
         }
 
