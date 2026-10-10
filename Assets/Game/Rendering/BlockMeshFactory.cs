@@ -16,6 +16,7 @@ namespace Aedifica.Rendering
             mesh.triangles = geometry.Triangles;
             mesh.normals = geometry.Normals;
             mesh.uv = geometry.UVs;
+            mesh.RecalculateTangents();
             mesh.bounds = geometry.Bounds;
             return mesh;
         }

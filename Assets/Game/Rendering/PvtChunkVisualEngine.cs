@@ -279,6 +279,7 @@ namespace Aedifica.Rendering
         {
             var mesh = new Mesh { name = $"PVT region {coordinate}", indexFormat = IndexFormat.UInt16 };
             mesh.SetVertices(vertices); mesh.SetNormals(normals); mesh.SetUVs(0, uvs); mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateTangents();
             mesh.RecalculateBounds();
             var gameObject = new GameObject($"PVT {coordinate} {material.name}");
             gameObject.transform.SetParent(parent, false);

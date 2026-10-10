@@ -51,7 +51,8 @@ namespace Aedifica.Geometry
             int start = vertices.Count;
             vertices.Add(a); vertices.Add(b); vertices.Add(c);
             for (int i = 0; i < 3; i++) normals.Add(normal);
-            uvs.Add(new Vector2(a.x, a.z)); uvs.Add(new Vector2(b.x, b.z)); uvs.Add(new Vector2(c.x, c.z));
+            uvs.Add(SurfaceUv.Project(a,normal)); uvs.Add(SurfaceUv.Project(b,normal));
+            uvs.Add(SurfaceUv.Project(c,normal));
             triangles.Add(start); triangles.Add(start + 1); triangles.Add(start + 2);
         }
     }
