@@ -108,10 +108,10 @@ namespace Aedifica.Rendering
                 new PieceTransform(new Vector3(x+px,ground+py,z+pz),Quaternion.identity);
             void Add(PieceTransform transform,PieceDimensions d,MaterialId mat)
             { pieces.Add(new PieceData(DetailId(2000,part++),transform,d,mat)); }
-            Add(At(0f,0f,0f),new SlabDimensions(25f,0.45f,20f),LabMaterialIds.Stone);
-            Add(At(0f,0.45f,8.5f),new WallDimensions(24f,6.5f,0.65f),LabMaterialIds.Stone);
-            Add(At(-12f,0.45f,0f),new WallDimensions(17f,6.5f,0.65f),LabMaterialIds.Stone);
-            Add(At(12f,0.45f,0f),new WallDimensions(17f,6.5f,0.65f),LabMaterialIds.Stone);
+            Add(At(0f,0f,0f),new PieceDimensions(new SlabDimensions(25f,0.45f,20f)),LabMaterialIds.Stone);
+            Add(At(0f,0.45f,8.5f),new PieceDimensions(new WallDimensions(24f,6.5f,0.65f)),LabMaterialIds.Stone);
+            Add(At(-12f,0.45f,0f),new PieceDimensions(new WallDimensions(17f,6.5f,0.65f)),LabMaterialIds.Stone);
+            Add(At(12f,0.45f,0f),new PieceDimensions(new WallDimensions(17f,6.5f,0.65f)),LabMaterialIds.Stone);
             var front=new PieceData(DetailId(2000,part++),At(0f,0.45f,-8.5f),
                 new WallDimensions(24f,6.5f,0.65f)).WithMaterial(LabMaterialIds.Stone);
             front=front.WithOpening(new WallOpening(new Guid(Seed,2000,(short)part,
@@ -119,22 +119,22 @@ namespace Aedifica.Rendering
                 WallOpeningKind.Passage,10.5f,0f,3f,4.2f));
             pieces.Add(front);
             AddOpeningFrames(pieces,front,2000,part);
-            Add(At(0f,6.95f,0f),new FlatRoofDimensions(25f,20f,0.5f),LabMaterialIds.Stone);
-            Add(At(0f,7.45f,0f),new DomeDimensions(13f,6f,0.45f),PvtFinalScenario.Ceramic);
-            Add(At(-8f,7.45f,0f),new VaultDimensions(4f,2.6f,11f,0.35f),LabMaterialIds.Stone);
-            Add(At(8f,7.45f,0f),new VaultDimensions(4f,2.6f,11f,0.35f),LabMaterialIds.Stone);
-            Add(At(0f,0.45f,-12f),new StairDimensions(5f,1.5f,4f,6),LabMaterialIds.Stone);
+            Add(At(0f,6.95f,0f),new PieceDimensions(new FlatRoofDimensions(25f,20f,0.5f)),LabMaterialIds.Stone);
+            Add(At(0f,7.45f,0f),new PieceDimensions(new DomeDimensions(13f,6f,0.45f)),PvtFinalScenario.Ceramic);
+            Add(At(-8f,7.45f,0f),new PieceDimensions(new VaultDimensions(4f,2.6f,11f,0.35f)),LabMaterialIds.Stone);
+            Add(At(8f,7.45f,0f),new PieceDimensions(new VaultDimensions(4f,2.6f,11f,0.35f)),LabMaterialIds.Stone);
+            Add(At(0f,0.45f,-12f),new PieceDimensions(new StairDimensions(5f,1.5f,4f,6)),LabMaterialIds.Stone);
             for (int i=0;i<8;i++)
             {
                 float px=-10.5f+i*3f;
-                Add(At(px,0.45f,-10.2f),new ColumnDimensions(0.65f,6.4f,0.65f),
+                Add(At(px,0.45f,-10.2f),new PieceDimensions(new ColumnDimensions(0.65f,6.4f,0.65f)),
                     LabMaterialIds.Stone);
-                Add(At(px,6.85f,-10.2f),new ParapetDimensions(2.7f,0.9f,0.6f),
+                Add(At(px,6.85f,-10.2f),new PieceDimensions(new ParapetDimensions(2.7f,0.9f,0.6f)),
                     LabMaterialIds.Stone);
             }
             for (int i=0;i<3;i++)
                 Add(At(-6f+i*6f,0.45f,-10.6f),
-                    new ArchDimensions(3.4f,4.3f,0.7f,0.55f,1.5f,0.3f),
+                    new PieceDimensions(new ArchDimensions(3.4f,4.3f,0.7f,0.55f,1.5f,0.3f)),
                     LabMaterialIds.Stone);
         }
 
