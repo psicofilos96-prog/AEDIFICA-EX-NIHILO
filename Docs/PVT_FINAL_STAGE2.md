@@ -1,0 +1,49 @@
+# PVT-2 — laboratório integrado de mundo e construção
+
+**Estado:** código preparado para validação no Unity 6000.6.4f1. Nenhum FPS da PVT-2 foi medido no ambiente remoto. A PVT-1, a E1 e a E2 permanecem independentes. A Issue [#1](https://github.com/psicofilos96-prog/AEDIFICA-EX-NIHILO/issues/1) mantém os limiares de aceitação; este documento não os redefine.
+
+## Escopo medido
+
+A, B e C contêm respectivamente 10.000, 25.000 e 50.000 `PieceData` em uma região de 1 × 1 km. Os lotes arquitetônicos incluem lajes, paredes com passagens, telhados, arcos, pilares e parapeitos. `Pvt2Scenario` preserva IDs, parâmetros e materiais da PVT-1, reposicionando os lotes no terreno com seed 4107. `ConstructionWorld` continua a autoridade para peças, índice espacial e mutações. `PvtChunkVisualEngine` usa páginas de malha por região/material e `MeshCollider` com mapeamento de triângulo para `PieceId`. As construções são editáveis por comandos, sem 50.000 `PieceView` simultâneos.
+
+`Pvt2Environment` cria terreno Unity de 1 km com relevo determinístico, uma textura pequena nativa, duas estradas e um rio simples com materiais URP Lit, sombras e luz direcional. Árvores, arbustos e cobertura rasteira usam uma malha de duas submalhas compartilhada, materiais compartilhados com instancing habilitado e carregamento/descarregamento real de GameObjects em células de 62,5 m. Os níveis A/B/C geram até 24/48/72 candidatos de vegetação por célula. A câmera panorâmica carrega toda a vegetação; rua e percurso atravessam janelas menores de células. Os objetos de vegetação não têm collider. Terreno e páginas de construção têm colisores. **Streaming das páginas arquitetônicas ainda não está implementado**; as páginas são mantidas e recebem frustum culling do Unity. Portanto este ensaio mede o streaming ambiental, não o custo final de streaming de uma cidade maior.
+
+As capturas usam câmera fixa, rua, panorâmica e percurso, três repetições por cenário. Cada captura inclui uma sequência reversível de 15 operações, espaçadas em aproximadamente um segundo: seleção por física, início/fim de edição, colocação, movimento, resize, recoloração, exclusão e undo/redo. Cada estado intermediário permanece renderizado por pelo menos um frame. O runner mede cada operação e o frame que a contém. Na primeira captura fixa de cada cenário, ele também grava e recarrega um snapshot binário versionado de todas as peças (incluindo aberturas) e compara IDs e estados. A comparação de posição, dimensões e parâmetros é exata; orientação usa vetores de base com tolerância de 0,000001 devido à renormalização de `PieceTransform` durante a leitura. Save/load e transições de vegetação ficam dentro da janela de FPS; travamentos são dados, não descartados. Há verificações de integridade espacial/lógica após cada captura.
+
+**Não medidos nesta versão:** NPCs, atividades, água dinâmica, colisão de vegetação, occlusion culling, LOD geométrico, streaming das páginas de construção, mapa 4 × 4 km, Snap contínuo sob carga, temperatura/clocks e VRAM real. A água é uma superfície geométrica opaca simples, sem simulação. Árvores e cobertura vegetal são proxies procedurais simples; a aparência não certifica o custo de assets realistas finais. Não atribuir custo zero aos sistemas ausentes. A versão de prévia oferece trajetórias determinísticas, sem controlador livre de exploração.
+
+## CSV e validade
+
+Uma sessão gera `*_frames.csv` (36 linhas: 3 cenários × 3 repetições × 4 câmeras), `*_events.csv`, `*_manifest.txt`, três imagens `*_fixed.png` e três arquivos `.pvt2` de save em `Application.persistentDataPath`. As imagens são solicitadas antes do aquecimento, sem leitura de volta durante a captura; confirmar que os arquivos existem. O manifesto inclui sessão, commit informado pelo ambiente, estado da árvore informado pelo ambiente, Unity, hardware, seed, resolução, qualidade e completude. O runner marca métricas indisponíveis como `unavailable`; RSS igual a zero é indisponível, não 0 MB. `SystemInfo.graphicsMemorySize` representa capacidade, não VRAM usada. `ProfilerRecorder` pode não fornecer render thread, draw calls ou batches em Release; só suas amostras válidas aparecem. `managed_mb` mede heap gerenciado; `unity_allocated_mb` mede alocação nativa rastreada e `unity_reserved_mb` mede memória reservada pela Unity; nenhum deles equivale ao RSS ou à VRAM. Uma linha `ok` exige integridade da captura. Linhas ausentes após falha interna aparecem como `skipped` com motivo. Uma falha externa do processo pode impedir a gravação final; conferir `Player.log`.
+
+FPS médio é `1000 / média do frame time`; FPS p01 é o inverso do percentil 99 do frame time. Frame times são amostras de `Time.unscaledDeltaTime`; `p95`, `p99`, contagens acima de 33,3/50 ms e edição/streaming incluem os respectivos picos. `*_events.csv` registra latência e número de regiões reconstruídas por operação. Os eventos são acumulados em memória durante a captura e escritos depois, para evitar I/O por operação. Save/load ainda executa I/O real durante a medição; `load_ms` exclui a validação subsequente, mas o frame inclui ambos. Contagens de folhagem são snapshots ao fim da captura, não médias por frame. O runner não reduz silenciosamente os tamanhos dos cenários. Cada cenário constrói do zero seu mundo lógico e suas páginas visuais; `logical_create_ms` e `visual_build_ms` são tempos de parede incluindo a distribuição do trabalho entre frames, fora da janela de FPS. Esses tempos também devem entrar no parecer de experiência de usuário.
+
+## Prévia e build Windows x64
+
+1. Na branch `pvt/integrated-world-slice`, preserve quaisquer alterações e stashes locais. Abra com Unity **6000.6.4f1**. Confira Console e execute **EditMode > Run All** e **PlayMode > Run All**. Registre totais e falhas. Não use FPS do Editor como resultado.
+2. Use **Tools > Aedifica > PVT-2 > Create Integrated World Scene**. O script cria `Assets/Game/Scenes/Pvt2IntegratedWorld.unity` e a coloca no Build Settings. Ele recusa sobrescrever uma cena existente. Abra a cena, entre em Play e aguarde a prévia A. Inspecione terreno, rio, estradas, vegetação, edifícios, sombras e materiais. O botão **Run PVT-2 Benchmark** permite uma execução de diagnóstico no Editor, sem status de homologação.
+3. Revise o Build Settings: a cena PVT-2 deve ser a primeira habilitada. Faça build **Windows x64 Release**, com **Development Build** e Profiler desativados. Feche o Editor antes da medição. Use o notebook ligado na tomada, GPU RTX 3050, mesma qualidade e plano de energia nas sessões. A cena e o Build Settings gerados podem deixar a árvore Windows modificada; registre esse estado e não descarte alterações automaticamente.
+4. No PowerShell, execute a build. Substitua o caminho do executável pelo caminho real. O manifesto registra os valores exportados; `dirty` é uma condição válida para diagnóstico, porém deve ser tratada como diferença de origem ao comparar sessões.
+
+```powershell
+cd 'C:\Projetos\AEDIFICA-EX-NIHILO'
+git status --short --branch
+$env:AEDIFICA_COMMIT = (git rev-parse HEAD).Trim()
+$env:AEDIFICA_WORKTREE = if (@(git status --porcelain).Count -eq 0) { 'clean' } else { 'dirty' }
+& 'C:\CAMINHO\DA\BUILD\AEDIFICA-EX-NIHILO.exe' -screen-width 1920 -screen-height 1080 -pvt2-run
+```
+
+5. Em `%USERPROFILE%\AppData\LocalLow\DefaultCompany\AEDIFICA-EX-NIHILO`, copie juntos CSVs, manifesto, imagens, saves `.pvt2` e `Player.log` para uma pasta imutável identificada pela sessão. Preserve também o SHA256 do executável e da cena gerada:
+
+```powershell
+Get-FileHash 'C:\CAMINHO\DA\BUILD\AEDIFICA-EX-NIHILO.exe' -Algorithm SHA256
+Get-FileHash 'Assets\Game\Scenes\Pvt2IntegratedWorld.unity' -Algorithm SHA256
+```
+
+6. Confirme 36 linhas de frames, cenários A/B/C com 12 linhas cada, `status=ok`, `integrity=pass`, eventos de edição, eventos de save/load para cada cenário, manifesto `complete=True`, nenhum erro fatal no `Player.log` e nenhuma peça ausente após reload. Se a execução terminar sem esses artefatos, trate-a como incompleta. Repetir em três **sessões independentes**, cada uma com novo processo Player; não são equivalentes às três repetições internas.
+
+## Comparação e gates
+
+PVT-1 mostrou, em uma sessão anterior, 90/90 capturas `ok`, 198/198 linhas de edição `ok` e triângulos iguais entre baseline e combined por cenário. No fixed combinado, a mediana das três repetições foi aproximadamente 462, 427 e 251 FPS em A/B/C. Esses números **não são projeções** da PVT-2: a PVT-1 não tinha terreno, vegetação, água, streaming ambiental ou save/load durante FPS. A dispersão fixed do combinado foi grande (faixas A 409–510, B 299–429, C 248–373 FPS); não inferir ganho estável sem sessões independentes. Na PVT-1, `process_rss_mb=0.000` e a antiga contagem de renderizadores visíveis era global, não específica da câmera. O novo runner não publica essas leituras como medições válidas. Os três arquivos originais fornecidos permanecem fora deste commit; SHA256 dos CSVs de frames/edição e do Player.log: `ba46297e7ac5b7d6809f2f3f5f85650917facc5bba826d6aae5d47f6887c50b6`, `fa427528f58971d907be134e15415d1f138984c9e0fe54efd2dc3fc0d8f0db04` e `ffa9a92da508656e062cfbebb37a050c152d5fa7857f8c406cc93f307d87b27f`.
+
+Avaliar a PVT-2 por câmera e cenário, especialmente panorama, p01, p95/p99, picos de streaming/save/load e integridade. Seguir a Issue #1: A média ≥80 e p01 ≥60; B média ≥60 e p01 ≥50; C média ≥60 (piso 55 apenas nas condições explicitamente aceitas) e p01 ≥45; aprovação estrita exige p01 ≥55 e investigação dos outliers. Esses gates só serão julgados após execução Windows real. `Player.log` e capturas visuais devem confirmar que a cena integrada é representativa. O custo financeiro não é estimado nesta etapa.
