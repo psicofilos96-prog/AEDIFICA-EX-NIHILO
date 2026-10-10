@@ -34,7 +34,9 @@ public static class PvtVisualMaterialBuilder
         Model("Gate","Gate","Gate_Albedo_1k.jpg","Gate_Normal_1k.png",
             "Gate_MetallicSmoothness_1k.png"),
         Model("Statue","Statue","Statue_Albedo_1k.jpg","Statue_Normal_1k.png",
-            "Statue_MetallicSmoothness_1k.png")
+            "Statue_MetallicSmoothness_1k.png"),
+        Free("DryGround"),Free("OldSandstone"),Free("BermudaGrass",true),
+        Free("WeatheredRock"),Free("CeramicPot")
     };
 
     private static Definition Texture(string name) => new Definition(name,
@@ -43,6 +45,10 @@ public static class PvtVisualMaterialBuilder
     private static Definition Model(string name,string folder,string baseMap,string normal,
         string mask,bool cutout=false) => new Definition(name,Root+"/Models/"+folder,
         baseMap,normal,mask,cutout);
+    private static Definition Free(string name,bool cutout=false) => new Definition(name,
+        "Assets/Game/Art/FreeReference/"+name,
+        name+(cutout ? "_Base_1k.png" : "_Albedo_1k.jpg"),
+        name+"_Normal_1k.png",name+"_MetallicSmoothness_1k.png",cutout);
 
     [MenuItem("Tools/Aedifica/Visual Milestone/Prepare CC0 URP Materials")]
     public static void Prepare()

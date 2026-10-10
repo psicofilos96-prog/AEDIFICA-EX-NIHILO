@@ -40,6 +40,15 @@ namespace Aedifica.Rendering
             return pieces;
         }
 
+        // A single editable residence for the free-asset art gate. Its geometry
+        // and stable IDs use the same authored recipe as the city review.
+        public static List<PieceData> BuildReferenceResidence()
+        {
+            var pieces=new List<PieceData>();
+            AddHouse(pieces,1,new Plot(0,0f,0f,0f));
+            return pieces;
+        }
+
         // Authored wall joints, openings and eaves replace the benchmark's repeated
         // detail recipe. The styles live only in this review scenario, not the engine.
         private static void AddHouse(List<PieceData> pieces,int building,Plot plot)
