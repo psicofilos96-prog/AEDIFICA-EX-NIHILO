@@ -60,7 +60,7 @@ namespace Aedifica.Rendering
             registry.Register(PvtVisualCityScenario.Road,road);
             registry.Register(PvtVisualCityScenario.Glass,glass);
             environment=new PvtVisualEnvironment(transform,PvtVisualCityScenario.Seed,terrain,road,
-                water,groundAlbedo,groundNormal,groundMask,pinePrefab,shrubPrefab);
+                stone,water,groundAlbedo,groundNormal,groundMask,pinePrefab,shrubPrefab);
             BuildWorld(PvtVisualCityScenario.Build());
             PositionCamera(0);
             environment.UpdateStreaming(sceneCamera.transform.position);
@@ -102,17 +102,8 @@ namespace Aedifica.Rendering
             gate=Instantiate(gatePrefab,transform);
             statue=Instantiate(statuePrefab,transform);
             PositionDoor();
-            PlaceOnGround(gate,new Vector3(-220f,0f,25f),2.8f);
-            PlaceOnGround(statue,new Vector3(-220f,0f,-25f),2f);
-            for (int i=0;i<8;i++)
-            {
-                float z=-96f+i*20f;
-                float x=i%2==0 ? -228f : -212f;
-                GameObject plant=Instantiate(pinePrefab,transform);
-                plant.name="CC0 street tree LOD";
-                plant.transform.position=new Vector3(x,Pvt2Scenario.GroundHeight(x,z),z);
-                plant.transform.rotation=Quaternion.Euler(0f,i*47f,0f);
-            }
+            PlaceOnGround(gate,new Vector3(-236f,0f,60f),2.8f);
+            PlaceOnGround(statue,new Vector3(-220f,0f,57f),2f);
         }
 
         private void PlaceOnGround(GameObject item,Vector3 p,float width)
@@ -266,16 +257,16 @@ namespace Aedifica.Rendering
             Vector3 position,target;
             switch (index)
             {
-                case 0: position=new Vector3(-218f,ground+3f,-76f);
-                    target=new Vector3(-238f,ground+3f,-76f);break;
-                case 1: position=new Vector3(-219f,ground+3f,-55f);
-                    target=new Vector3(-239f,ground+2.8f,-55f);break;
-                case 2: position=new Vector3(-220f,ground+5f,-108f);
-                    target=new Vector3(-220f,ground+4f,38f);break;
-                case 3: position=new Vector3(-390f,ground+105f,-170f);
-                    target=new Vector3(-220f,ground+3f,25f);break;
-                default: position=new Vector3(-220f,ground+12f,34f);
-                    target=new Vector3(-220f,ground+7f,78f);break;
+                case 0: position=new Vector3(-223f,ground+3.2f,-82f);
+                    target=new Vector3(-236f,ground+2.8f,-82f);break;
+                case 1: position=new Vector3(-226f,ground+2.1f,-61f);
+                    target=new Vector3(-239f,ground+2.4f,-61f);break;
+                case 2: position=new Vector3(-220f,ground+4.5f,-124f);
+                    target=new Vector3(-220f,ground+3.8f,23f);break;
+                case 3: position=new Vector3(-351f,ground+68f,-116f);
+                    target=new Vector3(-220f,ground+4f,22f);break;
+                default: position=new Vector3(-218f,ground+9f,44f);
+                    target=new Vector3(-220f,ground+8f,79f);break;
             }
             sceneCamera.transform.position=position;
             sceneCamera.transform.LookAt(target);

@@ -23,8 +23,10 @@ def pack_material(folder: Path, name: str, tag: str = "") -> None:
     if metallic.size != rough.size:
         raise ValueError(name + " metallic map resolution differs")
     zero = Image.new("L", rough.size, 0)
+    full_occlusion = Image.new("L", rough.size, 255)
     smoothness = rough.point(lambda pixel: 255 - pixel)
-    Image.merge("RGBA", (metallic, zero, zero, smoothness)).save(
+    # Terrain/Lit reads green as occlusion; white preserves full ambient light.
+    Image.merge("RGBA", (metallic, full_occlusion, zero, smoothness)).save(
         folder / (stem + "MetallicSmoothness_1k.png"), optimize=True)
 
 

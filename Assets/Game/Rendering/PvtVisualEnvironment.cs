@@ -23,25 +23,30 @@ namespace Aedifica.Rendering
         public int VegetationInstances { get; private set; }
 
         public PvtVisualEnvironment(Transform parent,int seed,Material terrainMaterial,
-            Material roadMaterial,Material waterMaterial,Texture2D groundAlbedo,
+            Material roadMaterial,Material stoneMaterial,Material waterMaterial,Texture2D groundAlbedo,
             Texture2D groundNormal,Texture2D groundMask,GameObject treePrefab,GameObject shrubPrefab)
         {
             this.parent=parent != null ? parent : throw new ArgumentNullException(nameof(parent));
             tree=treePrefab != null ? treePrefab : throw new ArgumentNullException(nameof(treePrefab));
             shrub=shrubPrefab != null ? shrubPrefab : throw new ArgumentNullException(nameof(shrubPrefab));
             if (groundAlbedo==null || groundNormal==null || groundMask==null ||
-                terrainMaterial==null || roadMaterial==null || waterMaterial==null)
+                terrainMaterial==null || roadMaterial==null || stoneMaterial==null || waterMaterial==null)
                 throw new ArgumentException("Visual terrain and river materials must be assigned.");
             this.seed=seed;
             root=new GameObject("PVT visual landscape");
             root.transform.SetParent(parent,false);
-            CreateTerrain(terrainMaterial,groundAlbedo,groundNormal,groundMask);
+            CreateTerrain(terrainMaterial,roadMaterial,groundAlbedo,groundNormal,groundMask);
             CreateRibbon("Historic river",true,waterMaterial,15f,false);
             CreateRibbon("Cobbled north street",true,roadMaterial,5f,true);
             CreateRibbon("Cobbled east street",false,roadMaterial,5f,true);
+            CreateRibbon("West stone curb",true,stoneMaterial,0.28f,true,-222.75f);
+            CreateRibbon("East stone curb",true,stoneMaterial,0.28f,true,-217.25f);
+            CreatePlaza(roadMaterial);
+            CreateCityPlantings();
         }
 
-        private void CreateTerrain(Material material,Texture2D albedo,Texture2D normal,Texture2D mask)
+        private void CreateTerrain(Material material,Material roadMaterial,
+            Texture2D albedo,Texture2D normal,Texture2D mask)
         {
             const int resolution=257;
             var data=new TerrainData {heightmapResolution=resolution,
@@ -53,8 +58,34 @@ namespace Aedifica.Rendering
             data.SetHeights(0,0,heights);
             var layer=new TerrainLayer {diffuseTexture=albedo,normalMapTexture=normal,
                 maskMapTexture=mask,tileSize=new Vector2(6f,6f)};
-            data.terrainLayers=new[] {layer};
-            owned.Add(data); owned.Add(layer);
+            var cobble=new TerrainLayer {
+                diffuseTexture=roadMaterial.GetTexture("_BaseMap") as Texture2D,
+                normalMapTexture=roadMaterial.GetTexture("_BumpMap") as Texture2D,
+                maskMapTexture=roadMaterial.GetTexture("_MetallicGlossMap") as Texture2D,
+                tileSize=new Vector2(5f,5f)};
+            if (cobble.diffuseTexture==null || cobble.normalMapTexture==null)
+                throw new InvalidOperationException("CC0 road material lacks terrain transition maps.");
+            data.terrainLayers=new[] {layer,cobble};
+            data.alphamapResolution=256;
+            var blend=new float[256,256,2];
+            for (int z=0;z<256;z++) for (int x=0;x<256;x++)
+            {
+                float wx=-500f+(x+0.5f)*1000f/256f;
+                float wz=-500f+(z+0.5f)*1000f/256f;
+                float irregular=0.7f*Mathf.Sin(wx*0.32f+wz*0.17f)+
+                    0.45f*Mathf.Sin(wx*0.73f-wz*0.28f);
+                float street=Mathf.Abs(wx+220f);
+                float streetRange=wz>=-146f && wz<=70f ?
+                    Mathf.Clamp01((9f+irregular-street)/5f) : 0f;
+                float plazaDistance=Mathf.Max(Mathf.Abs(wx+220f)-19f,
+                    Mathf.Abs(wz-59f)-11f);
+                float square=Mathf.Clamp01((3f+irregular-plazaDistance)/5f);
+                float mix=Mathf.Max(streetRange,square);
+                blend[z,x,0]=1f-mix;
+                blend[z,x,1]=mix;
+            }
+            data.SetAlphamaps(0,0,blend);
+            owned.Add(data); owned.Add(layer);owned.Add(cobble);
             GameObject terrain=Terrain.CreateTerrainGameObject(data);
             terrain.name="Textured terrain 1 km";
             terrain.transform.SetParent(root.transform,false);
@@ -62,7 +93,8 @@ namespace Aedifica.Rendering
             terrain.GetComponent<Terrain>().materialTemplate=material;
         }
 
-        private void CreateRibbon(string name,bool alongZ,Material material,float width,bool road)
+        private void CreateRibbon(string name,bool alongZ,Material material,float width,bool road,
+            float centerOverride=float.NaN)
         {
             const int segments=128;
             var vertices=new Vector3[(segments+1)*2];
@@ -73,7 +105,8 @@ namespace Aedifica.Rendering
                 float start=road ? alongZ ? -140f : -290f : -500f;
                 float length=road ? alongZ ? 200f : 140f : 1000f;
                 float t=start+i*length/segments;
-                float center=road ? alongZ ? -220f : -20f : Pvt2Scenario.RiverX(t);
+                float center=!float.IsNaN(centerOverride) ? centerOverride :
+                    road ? alongZ ? -220f : -20f : Pvt2Scenario.RiverX(t);
                 for (int side=0;side<2;side++)
                 {
                     float offset=(side==0 ? -0.5f : 0.5f)*width;
@@ -100,6 +133,59 @@ namespace Aedifica.Rendering
             obj.transform.SetParent(root.transform,false);
             obj.AddComponent<MeshFilter>().sharedMesh=mesh;
             obj.AddComponent<MeshRenderer>().sharedMaterial=material;
+        }
+
+        private void CreatePlaza(Material material)
+        {
+            const int cells=20;
+            var vertices=new Vector3[(cells+1)*(cells+1)];
+            var uv=new Vector2[vertices.Length];
+            var triangles=new int[cells*cells*6];
+            for (int z=0;z<=cells;z++) for (int x=0;x<=cells;x++)
+            {
+                float wx=-238f+x*36f/cells,wz=48f+z*20f/cells;
+                int index=z*(cells+1)+x;
+                vertices[index]=new Vector3(wx,Pvt2Scenario.GroundHeight(wx,wz)+0.16f,wz);
+                uv[index]=new Vector2(wx/5f,wz/5f);
+            }
+            for (int z=0;z<cells;z++) for (int x=0;x<cells;x++)
+            {
+                int index=(z*cells+x)*6,v=z*(cells+1)+x;
+                triangles[index]=v;triangles[index+1]=v+cells+1;triangles[index+2]=v+1;
+                triangles[index+3]=v+1;triangles[index+4]=v+cells+1;
+                triangles[index+5]=v+cells+2;
+            }
+            AddMesh("Stone forecourt",vertices,uv,triangles,material);
+        }
+
+        private void AddMesh(string name,Vector3[] vertices,Vector2[] uv,int[] triangles,Material material)
+        {
+            var mesh=new Mesh {name=name};
+            mesh.vertices=vertices;mesh.uv=uv;mesh.triangles=triangles;
+            mesh.RecalculateNormals();mesh.RecalculateTangents();mesh.RecalculateBounds();
+            owned.Add(mesh);
+            var obj=new GameObject(name);
+            obj.transform.SetParent(root.transform,false);
+            obj.AddComponent<MeshFilter>().sharedMesh=mesh;
+            obj.AddComponent<MeshRenderer>().sharedMaterial=material;
+        }
+
+        private void CreateCityPlantings()
+        {
+            var group=new GameObject("Courtyard plantings - CC0 LOD");
+            group.transform.SetParent(root.transform,false);
+            for (int i=0;i<16;i++)
+            {
+                float z=-117f+(i/4)*63f+(i%4)*3.4f;
+                float x=i%2==0 ? -252f-(i%3)*1.4f : -188f+(i%3)*1.4f;
+                bool pine=i%4==0;
+                GameObject plant=UnityEngine.Object.Instantiate(pine ? tree : shrub,group.transform);
+                plant.name=pine ? "CC0 courtyard pine" : "CC0 courtyard shrub";
+                plant.transform.position=new Vector3(x,Pvt2Scenario.GroundHeight(x,z),z);
+                plant.transform.rotation=Quaternion.Euler(0f,(i*137f)%360f,0f);
+                plant.transform.localScale*=pine ? 0.82f : 0.38f+(i%3)*0.12f;
+                VegetationInstances++;
+            }
         }
 
         public void UpdateStreaming(Vector3 cameraPosition,int radius=2)

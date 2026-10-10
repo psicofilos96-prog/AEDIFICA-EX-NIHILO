@@ -27,12 +27,23 @@ public static class PvtVisualCitySceneBuilder
         camera.nearClipPlane=0.15f;
         camera.farClipPlane=1600f;
         camera.allowHDR=true;
+        camera.allowMSAA=true;
+        RenderSettings.ambientMode=AmbientMode.Trilight;
+        RenderSettings.ambientSkyColor=new Color(0.65f,0.70f,0.74f);
+        RenderSettings.ambientEquatorColor=new Color(0.49f,0.47f,0.42f);
+        RenderSettings.ambientGroundColor=new Color(0.29f,0.26f,0.23f);
+        RenderSettings.fog=true;
+        RenderSettings.fogMode=FogMode.Linear;
+        RenderSettings.fogColor=new Color(0.70f,0.72f,0.71f);
+        RenderSettings.fogStartDistance=150f;
+        RenderSettings.fogEndDistance=650f;
         var sunObject=new GameObject("Afternoon sun");
         Light sun=sunObject.AddComponent<Light>();
         sun.type=LightType.Directional;
-        sun.intensity=1.15f;
+        sun.intensity=1.2f;
         sun.shadows=LightShadows.Soft;
-        sunObject.transform.rotation=Quaternion.Euler(42f,-36f,0f);
+        sun.shadowStrength=0.84f;
+        sunObject.transform.rotation=Quaternion.Euler(42f,-125f,0f);
         var runner=new GameObject("PVT Historic City Review").AddComponent<PvtVisualCityRunner>();
         string ground=PvtVisualMaterialBuilder.Root+"/Textures/Ground/Ground_";
         runner.Configure(camera,PvtVisualMaterialBuilder.Load("Stone"),
