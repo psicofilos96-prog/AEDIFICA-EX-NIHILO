@@ -49,6 +49,17 @@ namespace Aedifica.Rendering
             return pieces;
         }
 
+        // Reuse the editable residence grammar for new authored scenes without
+        // copying buildings into indivisible prefabs.
+        public static List<PieceData> BuildResidenceAt(int lotId,float x,float z,float yaw,int style)
+        {
+            if (lotId<3000 || lotId>31000 || style<0 || style>2)
+                throw new ArgumentOutOfRangeException(nameof(lotId));
+            var pieces=new List<PieceData>();
+            AddHouse(pieces,lotId,new Plot(style,x,z,yaw),true);
+            return pieces;
+        }
+
         // Authored wall joints, openings and eaves replace the benchmark's repeated
         // detail recipe. The styles live only in this review scenario, not the engine.
         private static void AddHouse(List<PieceData> pieces,int building,Plot plot,bool linkedFinishes=false)

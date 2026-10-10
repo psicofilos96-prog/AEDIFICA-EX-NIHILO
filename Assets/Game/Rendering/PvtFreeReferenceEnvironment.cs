@@ -15,7 +15,7 @@ namespace Aedifica.Rendering
             Material roadMaterial,Material stoneMaterial,
             Texture2D dryAlbedo,Texture2D dryNormal,Texture2D dryMask,
             Texture2D groundAlbedo,Texture2D groundNormal,Texture2D groundMask,
-            GameObject grass,GameObject rock,GameObject pot,GameObject shrub)
+            GameObject grass,GameObject rock,GameObject pot,GameObject shrub,bool village=false)
         {
             if (parent==null || terrainMaterial==null || roadMaterial==null || stoneMaterial==null ||
                 dryAlbedo==null || dryNormal==null || dryMask==null ||
@@ -29,7 +29,12 @@ namespace Aedifica.Rendering
             Ribbon("Weathered cobble lane",-10f,5.8f,roadMaterial);
             Ribbon("Near stone verge",-13.1f,0.28f,stoneMaterial);
             Ribbon("Far stone verge",-6.9f,0.28f,stoneMaterial);
-            Plant(grass,rock,pot,shrub);
+            if (village)
+            {
+                RibbonAlongZ("Castle approach",0f,5.6f,roadMaterial);
+                Plaza("Market square",-10f,6f,-19f,2f,roadMaterial);
+            }
+            Plant(grass,rock,pot,shrub,village);
         }
 
         private void BuildTerrain(Material material,Texture2D dryAlbedo,Texture2D dryNormal,
@@ -103,15 +108,73 @@ namespace Aedifica.Rendering
             item.AddComponent<MeshRenderer>().sharedMaterial=material;
         }
 
-        private void Plant(GameObject grass,GameObject rock,GameObject pot,GameObject shrub)
+        private void RibbonAlongZ(string name,float centerX,float width,Material material)
+        {
+            const int sections=32;
+            var vertices=new Vector3[(sections+1)*2];
+            var uv=new Vector2[vertices.Length];
+            var triangles=new int[sections*6];
+            for (int i=0;i<=sections;i++)
+            {
+                float z=-36f+i*72f/sections;
+                for (int side=0;side<2;side++)
+                {
+                    float x=centerX+(side==0 ? -0.5f : 0.5f)*width;
+                    int v=i*2+side;
+                    vertices[v]=new Vector3(x,Pvt2Scenario.GroundHeight(x,z)+0.15f,z);
+                    uv[v]=new Vector2(x/4f,z/4f);
+                }
+                if (i==sections) continue;
+                int a=i*2,t=i*6;
+                triangles[t]=a;triangles[t+1]=a+2;triangles[t+2]=a+1;
+                triangles[t+3]=a+1;triangles[t+4]=a+2;triangles[t+5]=a+3;
+            }
+            AddPavement(name,vertices,uv,triangles,material);
+        }
+
+        private void Plaza(string name,float x0,float x1,float z0,float z1,Material material)
+        {
+            const int nx=8,nz=8;
+            var vertices=new Vector3[(nx+1)*(nz+1)];
+            var uv=new Vector2[vertices.Length];
+            var triangles=new int[nx*nz*6];
+            for (int z=0;z<=nz;z++) for (int x=0;x<=nx;x++)
+            {
+                float wx=Mathf.Lerp(x0,x1,(float)x/nx),wz=Mathf.Lerp(z0,z1,(float)z/nz);
+                int v=z*(nx+1)+x;
+                vertices[v]=new Vector3(wx,Pvt2Scenario.GroundHeight(wx,wz)+0.14f,wz);
+                uv[v]=new Vector2(wx/4f,wz/4f);
+            }
+            for (int z=0;z<nz;z++) for (int x=0;x<nx;x++)
+            {
+                int a=z*(nx+1)+x,t=(z*nx+x)*6;
+                triangles[t]=a;triangles[t+1]=a+nx+1;triangles[t+2]=a+1;
+                triangles[t+3]=a+1;triangles[t+4]=a+nx+1;triangles[t+5]=a+nx+2;
+            }
+            AddPavement(name,vertices,uv,triangles,material);
+        }
+
+        private void AddPavement(string name,Vector3[] vertices,Vector2[] uv,int[] triangles,Material material)
+        {
+            var mesh=new Mesh {name=name};
+            mesh.vertices=vertices;mesh.uv=uv;mesh.triangles=triangles;
+            mesh.RecalculateNormals();mesh.RecalculateTangents();mesh.RecalculateBounds();
+            owned.Add(mesh);
+            var item=new GameObject(name);
+            item.transform.SetParent(root.transform,false);
+            item.AddComponent<MeshFilter>().sharedMesh=mesh;
+            item.AddComponent<MeshRenderer>().sharedMaterial=material;
+        }
+
+        private void Plant(GameObject grass,GameObject rock,GameObject pot,GameObject shrub,bool village=false)
         {
             uint state=19371u;
             int planted=0;
-            for (int i=0;i<150 && planted<55;i++)
+            for (int i=0;i<300 && planted<55;i++)
             {
                 float x=-31f+Next(ref state)*62f,z=-31f+Next(ref state)*62f;
-                if ((Mathf.Abs(x)<8.5f && Mathf.Abs(z)<8f) ||
-                    Mathf.Abs(z+10f)<4.6f) continue;
+                if (!village && (Mathf.Abs(x)<8.5f && Mathf.Abs(z)<8f) ||
+                    Mathf.Abs(z+10f)<4.6f || village && ReservedVillagePlot(x,z)) continue;
                 GameObject model=planted%10==0 ? rock : planted%7==0 ? shrub : grass;
                 GameObject item=UnityEngine.Object.Instantiate(model,root.transform);
                 item.name=model==rock ? "CC0 weathered rock LOD" :
@@ -123,12 +186,24 @@ namespace Aedifica.Rendering
             }
             for (int side=-1;side<=1;side+=2)
             {
-                float x=side*2.5f,z=-4.5f;
+                float x=village ? side*8f : side*2.5f;
+                float z=village ? -18f : -4.5f;
                 GameObject item=UnityEngine.Object.Instantiate(pot,root.transform);
-                item.name="CC0 ceramic door pot";
+                item.name=village ? "CC0 market ceramic pot" : "CC0 ceramic door pot";
                 item.transform.position=new Vector3(x,Pvt2Scenario.GroundHeight(x,z),z);
                 item.transform.rotation=Quaternion.Euler(0f,side*20f,0f);
             }
+        }
+
+        private static bool ReservedVillagePlot(float x,float z)
+        {
+            if (Mathf.Abs(x)<18f && z>1f) return true; // castle
+            if (Mathf.Abs(x)<10f && z<-17f) return true; // trading hall
+            if (Mathf.Abs(x)<5f && z>-19f && z<3f) return true; // approach and square
+            for (int side=-1;side<=1;side+=2)
+                foreach (float plotZ in new[] {-23f,-1f,21f})
+                    if (Mathf.Abs(x-side*23f)<7f && Mathf.Abs(z-plotZ)<7f) return true;
+            return false;
         }
 
         private static float Next(ref uint state)
