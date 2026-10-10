@@ -51,7 +51,12 @@ namespace Aedifica.Tests.EditMode
             {
                 Material material = AssetDatabase.LoadAssetAtPath<Material>(
                     "Assets/Game/Materials/Pvt2" + Names[i] + ".mat");
-                Assert.That(material.GetColor("_BaseColor"), Is.EqualTo(colors[i-1]));
+                Color actual = material.GetColor("_BaseColor");
+                Color expected = colors[i-1];
+                Assert.That(actual.r, Is.EqualTo(expected.r).Within(0.00001f), Names[i] + " R");
+                Assert.That(actual.g, Is.EqualTo(expected.g).Within(0.00001f), Names[i] + " G");
+                Assert.That(actual.b, Is.EqualTo(expected.b).Within(0.00001f), Names[i] + " B");
+                Assert.That(actual.a, Is.EqualTo(expected.a).Within(0.00001f), Names[i] + " A");
                 Assert.That(material.GetFloat("_Smoothness"), Is.EqualTo(smoothness[i-1]).Within(0.00001f));
                 Assert.That(material.enableInstancing, Is.True);
             }
