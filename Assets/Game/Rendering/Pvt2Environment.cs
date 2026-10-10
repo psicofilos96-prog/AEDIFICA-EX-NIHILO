@@ -17,6 +17,7 @@ namespace Aedifica.Rendering
         private readonly List<UnityEngine.Object> owned = new List<UnityEngine.Object>();
         private readonly Material bark, foliage, grass, road, water;
         private readonly Mesh treeMesh;
+        private TerrainData terrainData;
         private GameObject root;
         private int density;
         private int lastRadius = -1;
@@ -28,6 +29,26 @@ namespace Aedifica.Rendering
         public int TotalRegionTransitions { get; private set; }
         public float LastTransitionMs { get; private set; }
         public bool IsLoaded(Vector2Int cell) => loaded.ContainsKey(cell);
+        public int TerrainResolution => terrainData != null ? terrainData.heightmapResolution : 0;
+
+        public float TerrainHeight(int x, int z)
+        {
+            if (terrainData == null) throw new ObjectDisposedException(nameof(Pvt2Environment));
+            if (x < 0 || z < 0 || x >= terrainData.heightmapResolution || z >= terrainData.heightmapResolution)
+                throw new ArgumentOutOfRangeException(nameof(x));
+            return terrainData.GetHeight(x,z);
+        }
+
+        // Used by PVT-Final to measure a real heightmap/collider update; PVT-2 never invokes it.
+        public void SetTerrainHeight(int x, int z, float meters)
+        {
+            if (terrainData == null) throw new ObjectDisposedException(nameof(Pvt2Environment));
+            if (x < 0 || z < 0 || x >= terrainData.heightmapResolution || z >= terrainData.heightmapResolution)
+                throw new ArgumentOutOfRangeException(nameof(x));
+            if (float.IsNaN(meters) || float.IsInfinity(meters) || meters < 0f || meters > terrainData.size.y)
+                throw new ArgumentOutOfRangeException(nameof(meters));
+            terrainData.SetHeights(x,z,new[,] { { meters/terrainData.size.y } });
+        }
 
         public Pvt2Environment(Transform parent, int seed, Material terrainMaterial,
             Material barkMaterial, Material foliageMaterial, Material grassMaterial,
@@ -91,6 +112,7 @@ namespace Aedifica.Rendering
             var alpha = new float[16,16,1];
             for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) alpha[z,x,0] = 1f;
             data.SetAlphamaps(0,0,alpha);
+            terrainData = data;
             owned.Add(data); owned.Add(layer); owned.Add(texture);
             GameObject terrainObject = Terrain.CreateTerrainGameObject(data);
             terrainObject.name = "PVT-2 terrain 1 km";
@@ -238,6 +260,7 @@ namespace Aedifica.Rendering
         {
             if (disposed) return;
             disposed=true;
+            terrainData=null;
             loaded.Clear();
             if (root != null) UnityEngine.Object.Destroy(root);
             foreach (UnityEngine.Object asset in owned) if (asset != null) UnityEngine.Object.Destroy(asset);
