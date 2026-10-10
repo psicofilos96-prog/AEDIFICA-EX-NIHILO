@@ -17,6 +17,9 @@ namespace Aedifica.Tests.PlayMode
             Shader shader=Shader.Find("Universal Render Pipeline/Lit");
             Assert.That(shader,Is.Not.Null);
             var material=new Material(shader);
+            Shader terrainShader=Shader.Find("Universal Render Pipeline/Terrain/Lit");
+            Assert.That(terrainShader,Is.Not.Null);
+            var terrainMaterial=new Material(terrainShader);
             var root=new GameObject("PVT-2 integration test");
             var world=new ConstructionWorld();
             for (int i=0;i<10;i++) Assert.That(world.Create(Pvt2Scenario.PieceAt(i)).Changed,Is.True);
@@ -25,8 +28,10 @@ namespace Aedifica.Tests.PlayMode
             try
             {
                 Assert.That(engine.RebuildDirty(),Is.GreaterThan(0));
-                environment=new Pvt2Environment(root.transform,Pvt2Scenario.Seed);
+                environment=new Pvt2Environment(root.transform,Pvt2Scenario.Seed,terrainMaterial,
+                    material,material,material,material,material);
                 Assert.That(root.GetComponentInChildren<TerrainCollider>(),Is.Not.Null);
+                Assert.That(root.GetComponentInChildren<Terrain>().materialTemplate,Is.SameAs(terrainMaterial));
                 Assert.That(environment.UpdateStreaming(new Vector3(-250f,30f,-250f),1),Is.True);
                 Assert.That(environment.LoadedRegions,Is.GreaterThan(0));
                 Assert.That(environment.VegetationRenderers,Is.GreaterThan(0));
@@ -71,6 +76,7 @@ namespace Aedifica.Tests.PlayMode
                 engine.Dispose();
                 UnityEngine.Object.Destroy(root);
                 UnityEngine.Object.Destroy(material);
+                UnityEngine.Object.Destroy(terrainMaterial);
             }
             yield return null;
         }

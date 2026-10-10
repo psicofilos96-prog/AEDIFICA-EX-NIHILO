@@ -19,6 +19,8 @@ namespace Aedifica.Rendering
 
         [SerializeField] private Camera benchmarkCamera;
         [SerializeField] private Material neutralMaterial, stoneMaterial, brickMaterial, plasterMaterial;
+        [SerializeField] private Material terrainMaterial, barkMaterial, foliageMaterial;
+        [SerializeField] private Material grassMaterial, roadMaterial, waterMaterial;
         [SerializeField] private int seed = Pvt2Scenario.Seed;
         [SerializeField] private int batchSize = 64;
         [SerializeField] private int maxReservedMB = 4096;
@@ -45,6 +47,14 @@ namespace Aedifica.Rendering
             brickMaterial=brick; plasterMaterial=plaster;
         }
 
+        public void ConfigureEnvironment(Material terrain, Material bark, Material foliage,
+            Material grass, Material road, Material water)
+        {
+            Pvt2Environment.ValidateMaterials(terrain, bark, foliage, grass, road, water);
+            terrainMaterial=terrain; barkMaterial=bark; foliageMaterial=foliage;
+            grassMaterial=grass; roadMaterial=road; waterMaterial=water;
+        }
+
         private IEnumerator Start()
         {
             if (benchmarkCamera == null || neutralMaterial == null || batchSize < 1 ||
@@ -55,7 +65,8 @@ namespace Aedifica.Rendering
             }
             world = new ConstructionWorld();
             materials = new MaterialRegistry(neutralMaterial,stoneMaterial,brickMaterial,plasterMaterial);
-            try { landscape = new Pvt2Environment(transform,seed); }
+            try { landscape = new Pvt2Environment(transform,seed,terrainMaterial,barkMaterial,
+                foliageMaterial,grassMaterial,roadMaterial,waterMaterial); }
             catch (Exception error)
             {
                 failure=error.GetType().Name+": "+error.Message;

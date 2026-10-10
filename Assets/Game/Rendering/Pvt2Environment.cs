@@ -29,37 +29,48 @@ namespace Aedifica.Rendering
         public float LastTransitionMs { get; private set; }
         public bool IsLoaded(Vector2Int cell) => loaded.ContainsKey(cell);
 
-        public Pvt2Environment(Transform parent, int seed)
+        public Pvt2Environment(Transform parent, int seed, Material terrainMaterial,
+            Material barkMaterial, Material foliageMaterial, Material grassMaterial,
+            Material roadMaterial, Material waterMaterial)
         {
             this.parent = parent != null ? parent : throw new ArgumentNullException(nameof(parent));
             this.seed = seed;
-            bark = Material("PVT-2 bark", new Color(0.28f, 0.18f, 0.1f), 0.05f);
-            foliage = Material("PVT-2 foliage", new Color(0.16f, 0.31f, 0.12f), 0.08f);
-            grass = Material("PVT-2 grass", new Color(0.24f, 0.38f, 0.13f), 0.02f);
-            road = Material("PVT-2 road", new Color(0.36f, 0.32f, 0.25f), 0.04f);
-            water = Material("PVT-2 river", new Color(0.11f, 0.25f, 0.31f), 0.75f);
+            ValidateMaterials(terrainMaterial, barkMaterial, foliageMaterial, grassMaterial,
+                roadMaterial, waterMaterial);
+            bark = barkMaterial;
+            foliage = foliageMaterial;
+            grass = grassMaterial;
+            road = roadMaterial;
+            water = waterMaterial;
             treeMesh = TreeMesh();
             owned.Add(treeMesh);
             root = new GameObject("PVT-2 landscape");
             root.transform.SetParent(parent, false);
-            CreateTerrain();
+            CreateTerrain(terrainMaterial);
             CreateRibbon("River", true, water, 16f);
             CreateRibbon("North-south road", true, road, 5f, true);
             CreateRibbon("East-west road", false, road, 5f, true);
         }
 
-        private Material Material(string name, Color color, float smoothness)
+        public static void ValidateMaterials(Material terrain, Material bark, Material foliage,
+            Material grass, Material road, Material water)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null) throw new InvalidOperationException("URP Lit shader is required by PVT-2.");
-            var material = new Material(shader) { name = name, enableInstancing = true };
-            material.SetColor("_BaseColor", color);
-            material.SetFloat("_Smoothness", smoothness);
-            owned.Add(material);
-            return material;
+            ValidateMaterial(terrain, "terrain", "Universal Render Pipeline/Terrain/Lit");
+            ValidateMaterial(bark, "bark", "Universal Render Pipeline/Lit");
+            ValidateMaterial(foliage, "foliage", "Universal Render Pipeline/Lit");
+            ValidateMaterial(grass, "grass", "Universal Render Pipeline/Lit");
+            ValidateMaterial(road, "road", "Universal Render Pipeline/Lit");
+            ValidateMaterial(water, "water", "Universal Render Pipeline/Lit");
         }
 
-        private void CreateTerrain()
+        private static void ValidateMaterial(Material material, string role, string shaderName)
+        {
+            if (material == null || material.shader == null || !material.shader.isSupported ||
+                material.shader.name != shaderName)
+                throw new InvalidOperationException($"PVT-2 {role} requires a supported {shaderName} material asset.");
+        }
+
+        private void CreateTerrain(Material terrainMaterial)
         {
             const int resolution = 257;
             var data = new TerrainData { heightmapResolution = resolution,
@@ -85,11 +96,7 @@ namespace Aedifica.Rendering
             terrainObject.name = "PVT-2 terrain 1 km";
             terrainObject.transform.SetParent(root.transform, false);
             terrainObject.transform.position = new Vector3(-500f,0f,-500f);
-            Shader terrainShader = Shader.Find("Universal Render Pipeline/Terrain/Lit");
-            if (terrainShader == null) throw new InvalidOperationException("URP Terrain/Lit shader is required by PVT-2.");
-            var terrainMaterial = new Material(terrainShader) { name = "PVT-2 terrain URP" };
             terrainObject.GetComponent<Terrain>().materialTemplate = terrainMaterial;
-            owned.Add(terrainMaterial);
         }
 
         private void CreateRibbon(string name, bool alongZ, Material material, float width, bool isRoad = false)
