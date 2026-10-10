@@ -84,13 +84,19 @@ public static class PvtMedievalCastleVillageSceneBuilder
                 "WeatheredRock","CeramicPot"})
             {
                 string material=PvtVisualMaterialBuilder.Output+"/"+name+".mat";
-                if (!dependencies.Contains(material) && name!="BermudaGrass" &&
-                    name!="WeatheredRock" && name!="CeramicPot")
+                if (name=="OldSandstone" && !dependencies.Contains(material))
                     throw new BuildFailedException("Village scene lacks persistent URP material: "+material);
                 Material checkedMaterial=PvtVisualMaterialBuilder.Load(name);
                 if (checkedMaterial.shader==null ||
                     checkedMaterial.shader.name!="Universal Render Pipeline/Lit")
                     throw new BuildFailedException("Incorrect URP shader on "+material);
+            }
+            foreach (string suffix in new[] {"Albedo_1k.jpg","Normal_1k.png",
+                "MetallicSmoothness_1k.png"})
+            {
+                string texture=Free+"DryGround/DryGround_"+suffix;
+                if (!dependencies.Contains(texture))
+                    throw new BuildFailedException("Village scene lacks CC0 terrain map: "+texture);
             }
             foreach (string name in new[] {"BermudaGrass","WeatheredRock","CeramicPot"})
             {
