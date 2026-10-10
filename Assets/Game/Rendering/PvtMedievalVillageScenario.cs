@@ -69,7 +69,7 @@ namespace Aedifica.Rendering
                         (short)(part-1),0x46,0x52,0x41,0x4d,0x45,0,0,(byte)i),
                         id,openingId,frame,LabMaterialIds.Stone));
                     wall=wall.WithFinish(new ArchitecturalFinish(new Guid(Seed+3,(short)region,
-                        (short)(part-1),0x4c,0x49,0x4e,0x54,0x45,0,(byte)i),
+                        (short)(part-1),0x4c,0x49,0x4e,0x54,0x45,0,0,(byte)i),
                         id,openingId,ArchitecturalFinishKind.Lintel,LabMaterialIds.Stone));
                 }
                 pieces.Add(wall);return wall;
