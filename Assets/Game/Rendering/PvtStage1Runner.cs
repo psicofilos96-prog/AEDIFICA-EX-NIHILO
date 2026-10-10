@@ -23,6 +23,7 @@ namespace Aedifica.Rendering
         [SerializeField] private float warmupSeconds = 15f;
         [SerializeField] private float captureSeconds = 30f;
         [SerializeField] private float maxCaptureWallSeconds = 120f;
+        [SerializeField] private bool captureReferenceImages = true;
 
         private readonly Dictionary<PieceId, PieceView> views = new Dictionary<PieceId, PieceView>();
         private readonly HashSet<string> frameRows = new HashSet<string>();
@@ -31,7 +32,7 @@ namespace Aedifica.Rendering
         private MaterialRegistry materials;
         private PvtChunkVisualEngine combined;
         private GameObject visualRoot;
-        private string framesPath, editsPath, layout, setupError, captureError, editError;
+        private string framesPath, editsPath, manifestPath, layout, setupError, captureError, editError;
         private double logicalCreateMs, visualBuildMs;
 
         public void Configure(Camera camera, Material neutral, Material stone, Material brick, Material plaster)
@@ -46,8 +47,31 @@ namespace Aedifica.Rendering
             Directory.CreateDirectory(Application.persistentDataPath);
             framesPath = Path.Combine(Application.persistentDataPath, prefix + "_frames.csv");
             editsPath = Path.Combine(Application.persistentDataPath, prefix + "_edits.csv");
+            manifestPath = Path.Combine(Application.persistentDataPath, prefix + "_manifest.txt");
+            if (!Application.isEditor) Screen.SetResolution(1920, 1080, false);
             File.WriteAllText(framesPath, PvtBenchmarkCsv.FramesHeader + Environment.NewLine);
             File.WriteAllText(editsPath, PvtBenchmarkCsv.EditsHeader + Environment.NewLine);
+            File.WriteAllLines(manifestPath, new[] {
+                "session=" + prefix,
+                "utc_start=" + DateTime.UtcNow.ToString("o"),
+                "commit=" + Commit,
+                "worktree=" + (Environment.GetEnvironmentVariable("AEDIFICA_WORKTREE") ?? "unavailable"),
+                "unity=" + Application.unityVersion,
+                "platform=" + Application.platform,
+                "environment=" + (Application.isEditor ? "Editor" : Debug.isDebugBuild ? "DevelopmentPlayer" : "ReleasePlayer"),
+                "seed=" + seed,
+                "cpu=" + SystemInfo.processorType,
+                "gpu=" + SystemInfo.graphicsDeviceName,
+                "ram_capacity_mb=" + SystemInfo.systemMemorySize,
+                "vram_capacity_mb=" + SystemInfo.graphicsMemorySize,
+                "resolution=" + Screen.width + "x" + Screen.height,
+                "quality=" + QualitySettings.GetQualityLevel(),
+                "vsync=" + QualitySettings.vSyncCount,
+                "target_fps=" + Application.targetFrameRate,
+                "profiler_attached=" + UnityEngine.Profiling.Profiler.enabled,
+                "renderers_visible=" + "unavailable: Renderer.isVisible is not specific to the benchmark camera",
+                "vram_used_mb=" + "unavailable: Unity does not expose reliable process VRAM usage here"
+            });
             if (benchmarkCamera == null || neutralMaterial == null || batchSize < 1 || maxReservedMB < 1 ||
                 maxSetupSeconds <= 0f || warmupSeconds < 0f || captureSeconds <= 0f ||
                 maxCaptureWallSeconds < captureSeconds)
@@ -56,7 +80,6 @@ namespace Aedifica.Rendering
                 Debug.LogError($"PVT-1 setup failed; CSV={framesPath}", this);
                 yield break;
             }
-            if (!Application.isEditor) Screen.SetResolution(1920, 1080, false);
             world = new ConstructionWorld();
             materials = new MaterialRegistry(neutralMaterial, stoneMaterial, brickMaterial, plasterMaterial);
             Debug.Log($"PVT-1 begin: seed={seed}, commit={Commit}, resolution={Screen.width}x{Screen.height}, " +
@@ -132,7 +155,13 @@ namespace Aedifica.Rendering
                 }
                 Debug.Log($"PVT-1 scenario {Name(target)} complete; logical={world.Count}", this);
             }
-            Debug.Log($"PVT-1 complete: frames={framesPath}, edits={editsPath}", this);
+            File.AppendAllLines(manifestPath, new[] {
+                "utc_end=" + DateTime.UtcNow.ToString("o"),
+                "complete=" + (frameRows.Count == 90 && editRows.Count == 18),
+                "frame_rows=" + frameRows.Count,
+                "edit_groups=" + editRows.Count
+            });
+            Debug.Log($"PVT-1 complete: frames={framesPath}, edits={editsPath}, manifest={manifestPath}", this);
         }
 
         private bool SafetyFailure(Stopwatch timer, out string error)
@@ -233,6 +262,19 @@ namespace Aedifica.Rendering
         {
             captureError = null;
             PositionCamera(cameraMode, 0f);
+            if (captureReferenceImages && repeat == 1 && cameraMode == "fixed")
+            {
+                yield return null; // apply the exact fixed-camera transform before requesting the image
+                string screenshot = Path.Combine(Application.persistentDataPath,
+                    Path.GetFileNameWithoutExtension(framesPath).Replace("_frames", "") +
+                    $"_{Name(target)}_{layout}_fixed.png");
+                try
+                {
+                    ScreenCapture.CaptureScreenshot(screenshot);
+                    Debug.Log($"PVT-1 reference image requested: {screenshot}", this);
+                }
+                catch (Exception error) { Debug.LogWarning("PVT-1 reference image unavailable: " + error.Message, this); }
+            }
             float warmup = 0f;
             while (warmup < warmupSeconds)
             {
@@ -302,7 +344,8 @@ namespace Aedifica.Rendering
         private void WriteFrame(int target, int repeat, string mode, string cameraMode,
             string status, string error, FrameSample sample)
         {
-            string U = "unavailable", N(double value) => PvtBenchmarkCsv.Number(value);
+            string U = "unavailable";
+            string N(double value) => PvtBenchmarkCsv.Number(value);
             List<float> frames = sample?.Frames;
             double sum = 0d, maximum = 0d;
             int above33 = 0, above50 = 0;
@@ -328,7 +371,7 @@ namespace Aedifica.Rendering
                 world != null ? world.Count.ToString() : "0",
                 sample != null ? (sample.Representation + 1).ToString() : U,
                 sample != null ? sample.Representation.ToString() : U,
-                sample != null ? sample.Visible.ToString() : U,
+                U, // Renderer.isVisible includes other cameras and is not a camera-specific count.
                 sample != null ? sample.Representation.ToString() : U,
                 sample != null ? sample.Representation.ToString() : U,
                 sample != null ? sample.Triangles.ToString() : U,
@@ -351,7 +394,7 @@ namespace Aedifica.Rendering
                 sample != null ? PvtBenchmarkCsv.Mean(sample.Counters.Batches) : U,
                 sample != null ? PvtBenchmarkCsv.Mean(sample.Counters.SetPass) : U,
                 N(GC.GetTotalMemory(false) / 1048576d), N(Profiler.GetTotalReservedMemoryLong() / 1048576d),
-                rss.HasValue ? N(rss.Value / 1048576d) : U, U,
+                rss.HasValue && rss.Value > 0 ? N(rss.Value / 1048576d) : U, U,
                 N(logicalCreateMs), N(visualBuildMs), status, error
             };
             File.AppendAllText(framesPath, PvtBenchmarkCsv.Row(PvtBenchmarkCsv.FramesHeader, fields) + Environment.NewLine);

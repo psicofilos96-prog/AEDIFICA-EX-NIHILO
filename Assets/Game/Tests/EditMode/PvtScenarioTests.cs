@@ -66,5 +66,27 @@ namespace Aedifica.Tests.EditMode
             var samples = new List<float> { 1f, 2f, 3f, 4f };
             Assert.That(PvtBenchmarkCsv.Percentile(samples, 0.95d), Is.EqualTo(4d));
         }
+
+        [Test]
+        public void PvtRecolorRequiresAnEffectiveMaterialChange()
+        {
+            var world = new ConstructionWorld();
+            PieceData slab = PvtScenario.PieceAt(0);
+            Assert.That(slab.MaterialId, Is.EqualTo(LabMaterialIds.Stone));
+            Assert.That(world.Create(slab).Changed, Is.True);
+            var history = new ConstructionCommandHistory(world);
+            int notifications = 0;
+            world.Changed += _ => notifications++;
+
+            Assert.That(history.Update(slab.Id, slab.WithMaterial(LabMaterialIds.Stone)).Changed, Is.False);
+            Assert.That(notifications, Is.Zero);
+            Assert.That(history.Update(slab.Id, slab.WithMaterial(LabMaterialIds.Brick)).Changed, Is.True);
+            Assert.That(notifications, Is.EqualTo(1));
+            Assert.That(world.TryGet(slab.Id, out PieceData recolored), Is.True);
+            Assert.That(recolored.MaterialId, Is.EqualTo(LabMaterialIds.Brick));
+            Assert.That(history.TryUndo(out _), Is.True);
+            Assert.That(world.TryGet(slab.Id, out PieceData restored), Is.True);
+            Assert.That(restored.MaterialId, Is.EqualTo(LabMaterialIds.Stone));
+        }
     }
 }

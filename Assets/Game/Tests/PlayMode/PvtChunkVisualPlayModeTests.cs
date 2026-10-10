@@ -89,10 +89,12 @@ namespace Aedifica.Tests.PlayMode
                 Assert.That(history.Update(a.Id, resized).Changed, Is.True);
                 Assert.That(engine.DirtyRegionCount, Is.EqualTo(1));
                 engine.RebuildDirty();
-                PieceData recolored = resized.WithMaterial(LabMaterialIds.Stone);
+                PieceData recolored = resized.WithMaterial(LabMaterialIds.Brick);
                 Assert.That(history.Update(a.Id, recolored).Changed, Is.True);
                 engine.RebuildDirty();
-                Assert.That(world.TryGet(a.Id, out PieceData colored) && colored.MaterialId == LabMaterialIds.Stone,
+                Assert.That(
+                    world.TryGet(a.Id, out PieceData colored) &&
+                    colored.MaterialId == LabMaterialIds.Brick,
                     Is.True);
                 Assert.That(history.TryUndo(out _), Is.True);
                 engine.RebuildDirty();
