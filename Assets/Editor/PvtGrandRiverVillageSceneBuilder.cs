@@ -12,19 +12,26 @@ using UnityEngine.Rendering;
 public static class PvtGrandRiverVillageSceneBuilder
 {
     public const string ScenePath="Assets/Game/Scenes/PvtGrandRiverVillage.unity";
+    public const string ScalePath="Assets/Game/Scenes/PvtGrandRiverScaleLab.unity";
     private const string Free="Assets/Game/Art/FreeReference/";
 
     [MenuItem("Tools/Aedifica/Grand River Village/Create Village Scene")]
-    public static void CreateScene()
+    public static void CreateScene() => Create(false);
+
+    [MenuItem("Tools/Aedifica/Grand River Village/Create Scale Lab Scene")]
+    public static void CreateScaleScene() => Create(true);
+
+    private static void Create(bool scale)
     {
-        if (AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath)!=null)
-            throw new InvalidOperationException("Existing reference scene will not be overwritten: "+ScenePath);
+        string path=scale ? ScalePath : ScenePath;
+        if (AssetDatabase.LoadAssetAtPath<SceneAsset>(path)!=null)
+            throw new InvalidOperationException("Existing scene will not be overwritten: "+path);
         PvtGrandVillageAssetBuilder.Prepare();
         var scene=EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
         var cameraObject=new GameObject("Grand River Village Camera");
         cameraObject.tag="MainCamera";
         Camera camera=cameraObject.AddComponent<Camera>();
-        camera.fieldOfView=58f;camera.nearClipPlane=0.1f;camera.farClipPlane=350f;
+        camera.fieldOfView=58f;camera.nearClipPlane=0.1f;camera.farClipPlane=scale ? 3500f : 350f;
         camera.allowHDR=true;camera.allowMSAA=true;
         RenderSettings.ambientMode=AmbientMode.Trilight;
         RenderSettings.ambientSkyColor=new Color(0.62f,0.68f,0.74f);
@@ -38,30 +45,44 @@ public static class PvtGrandRiverVillageSceneBuilder
         sun.type=LightType.Directional;sun.intensity=1.15f;
         sun.shadows=LightShadows.Soft;sun.shadowStrength=0.82f;
         sunObject.transform.rotation=Quaternion.Euler(43f,-130f,0f);
-        var runner=new GameObject("Editable Grand River Village").AddComponent<PvtFreeAssetsReferenceRunner>();
+        var host=new GameObject(scale ? "Grand River Scale Lab" : "Editable Grand River Village");
         string oldGround=PvtVisualMaterialBuilder.Root+"/Textures/Ground/Ground_";
-        runner.Configure(camera,PvtVisualMaterialBuilder.Load("OldSandstone"),
-            PvtVisualMaterialBuilder.Load("Brick"),PvtVisualMaterialBuilder.Load("Wood"),
-            PvtVisualMaterialBuilder.Load("Plaster"),PvtVisualMaterialBuilder.Load("Roof"),
-            PvtVisualMaterialBuilder.Load("Road"),
-            AssetDatabase.LoadAssetAtPath<Material>("Assets/Game/Materials/Pvt2Terrain.mat"),
-            PvtVisualMaterialBuilder.Load("Glass"),
-            Texture("DryGround","Albedo_1k.jpg"),Texture("DryGround","Normal_1k.png"),
-            Texture("DryGround","MetallicSmoothness_1k.png"),
-            AssetDatabase.LoadAssetAtPath<Texture2D>(oldGround+"Albedo_1k.jpg"),
-            AssetDatabase.LoadAssetAtPath<Texture2D>(oldGround+"Normal_1k.png"),
-            AssetDatabase.LoadAssetAtPath<Texture2D>(oldGround+"MetallicSmoothness_1k.png"),
-            PvtFreeReferenceAssetBuilder.Load("BermudaGrass"),
-            PvtFreeReferenceAssetBuilder.Load("WeatheredRock"),
-            PvtFreeReferenceAssetBuilder.Load("CeramicPot"),PvtVisualAssetBuilder.Load("Shrub"));
-        runner.ConfigureGrand(PvtGrandVillageAssetBuilder.LoadPrefab(),
-            PvtVisualAssetBuilder.Load("Pine"),PvtVisualMaterialBuilder.Load("Water"));
-        EditorSceneManager.SaveScene(scene,ScenePath);
-        var scenes=EditorBuildSettings.scenes.Where(item=>item.path!=ScenePath).ToList();
-        scenes.Insert(0,new EditorBuildSettingsScene(ScenePath,true));
+        Material stone=PvtVisualMaterialBuilder.Load("OldSandstone"),
+            brick=PvtVisualMaterialBuilder.Load("Brick"),wood=PvtVisualMaterialBuilder.Load("Wood"),
+            plaster=PvtVisualMaterialBuilder.Load("Plaster"),roof=PvtVisualMaterialBuilder.Load("Roof"),
+            road=PvtVisualMaterialBuilder.Load("Road"),
+            terrain=AssetDatabase.LoadAssetAtPath<Material>("Assets/Game/Materials/Pvt2Terrain.mat"),
+            glass=PvtVisualMaterialBuilder.Load("Glass"),water=PvtVisualMaterialBuilder.Load("Water");
+        Texture2D dryA=Texture("DryGround","Albedo_1k.jpg"),
+            dryN=Texture("DryGround","Normal_1k.png"),
+            dryM=Texture("DryGround","MetallicSmoothness_1k.png"),
+            groundA=AssetDatabase.LoadAssetAtPath<Texture2D>(oldGround+"Albedo_1k.jpg"),
+            groundN=AssetDatabase.LoadAssetAtPath<Texture2D>(oldGround+"Normal_1k.png"),
+            groundM=AssetDatabase.LoadAssetAtPath<Texture2D>(oldGround+"MetallicSmoothness_1k.png");
+        GameObject grass=PvtFreeReferenceAssetBuilder.Load("BermudaGrass"),
+            rock=PvtFreeReferenceAssetBuilder.Load("WeatheredRock"),
+            pot=PvtFreeReferenceAssetBuilder.Load("CeramicPot"),
+            shrub=PvtVisualAssetBuilder.Load("Shrub"),
+            coastal=PvtGrandVillageAssetBuilder.LoadPrefab(),pine=PvtVisualAssetBuilder.Load("Pine");
+        if (scale)
+            host.AddComponent<PvtGrandVillageScaleRunner>().Configure(camera,stone,brick,wood,
+                plaster,roof,road,terrain,glass,water,dryA,dryN,dryM,groundA,groundN,groundM,
+                coastal,pine,shrub,rock);
+        else
+        {
+            var runner=host.AddComponent<PvtFreeAssetsReferenceRunner>();
+            runner.Configure(camera,stone,
+                brick,wood,plaster,roof,road,terrain,glass,dryA,dryN,dryM,
+                groundA,groundN,groundM,grass,rock,pot,shrub);
+            runner.ConfigureGrand(coastal,pine,water);
+        }
+        EditorSceneManager.SaveScene(scene,path);
+        var scenes=EditorBuildSettings.scenes.Where(item=>item.path!=path).ToList();
+        scenes.Insert(0,new EditorBuildSettingsScene(path,true));
         EditorBuildSettings.scenes=scenes.ToArray();
         AssetDatabase.SaveAssets();
-        Debug.Log("Grand river village scene created: run Play and review six views in Game view.");
+        Debug.Log(scale ? "Grand river scale lab scene created: run a Release Player with -grand-scale-run."
+            : "Grand river village scene created: run Play and review six views in Game view.");
     }
 
     private static Texture2D Texture(string name,string suffix)
@@ -77,11 +98,13 @@ public static class PvtGrandRiverVillageSceneBuilder
         public int callbackOrder=>0;
         public void OnPreprocessBuild(BuildReport report)
         {
-            if (!EditorBuildSettings.scenes.Any(item=>item.enabled && item.path==ScenePath)) return;
+            string scene=EditorBuildSettings.scenes.Any(item=>item.enabled && item.path==ScalePath)
+                ? ScalePath : ScenePath;
+            if (!EditorBuildSettings.scenes.Any(item=>item.enabled && item.path==scene)) return;
             if (GraphicsSettings.defaultRenderPipeline==null ||
                 GraphicsSettings.defaultRenderPipeline.name!="PC_RPAsset")
                 throw new BuildFailedException("Grand river village requires PC_RPAsset.");
-            string[] dependencies=AssetDatabase.GetDependencies(ScenePath,true);
+            string[] dependencies=AssetDatabase.GetDependencies(scene,true);
             foreach (string name in new[] {"DryGround","OldSandstone","BermudaGrass",
                 "WeatheredRock","CeramicPot"})
             {
@@ -118,7 +141,8 @@ public static class PvtGrandRiverVillageSceneBuilder
             string pine=PvtVisualAssetBuilder.Folder+"/Pine.prefab";
             if (!dependencies.Contains(pine))
                 throw new BuildFailedException("Grand river scene lacks CC0 pine LOD: "+pine);
-            foreach (string name in new[] {"BermudaGrass","WeatheredRock","CeramicPot"})
+            foreach (string name in scene==ScalePath
+                ? new[] {"WeatheredRock"} : new[] {"BermudaGrass","WeatheredRock","CeramicPot"})
             {
                 string prefab=PvtFreeReferenceAssetBuilder.Folder+"/"+name+".prefab";
                 if (!dependencies.Contains(prefab))

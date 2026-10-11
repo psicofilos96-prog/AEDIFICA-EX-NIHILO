@@ -88,7 +88,7 @@ namespace Aedifica.Rendering
             GameObject terrainObject=Terrain.CreateTerrainGameObject(data);
             terrainObject.name="Castle hill and riverbanks - CC0 ground";
             terrainObject.transform.SetParent(root.transform,false);
-            terrainObject.transform.position=new Vector3(-Extent,0f,-Extent);
+            terrainObject.transform.localPosition=new Vector3(-Extent,0f,-Extent);
             terrainObject.GetComponent<Terrain>().materialTemplate=material;
         }
 
@@ -182,7 +182,7 @@ namespace Aedifica.Rendering
                     planted%7==0 ? pine : coastalTree;
                 GameObject item=UnityEngine.Object.Instantiate(prefab,root.transform);
                 item.name=prefab.name+" LOD environment";
-                item.transform.position=new Vector3(x,Height(x,z),z);
+                item.transform.localPosition=new Vector3(x,Height(x,z),z);
                 item.transform.rotation=Quaternion.Euler(0f,Next(ref state)*360f,0f);
                 item.transform.localScale*=0.7f+Next(ref state)*0.55f;
                 planted++;
