@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Aedifica.Rendering
 {
-    // One residence; all architectural edits go through ConstructionCommandHistory.
+    // Authored reference scenes; all architectural edits go through ConstructionCommandHistory.
     public sealed class PvtFreeAssetsReferenceRunner : MonoBehaviour
     {
         private static readonly string[] ReferenceViews={"finished facade","door and window detail","street","landscape"};
@@ -14,23 +14,32 @@ namespace Aedifica.Rendering
         private static readonly string[] VillageViews={"castle gate","market arcade","residential lane",
             "castle courtyard","village panorama"};
         private static readonly string[] VillageKeys={"castle","market","houses","courtyard","panorama"};
-        private string[] Views=>villageCastle ? VillageViews : ReferenceViews;
-        private string[] ViewKeys=>villageCastle ? VillageKeys : ReferenceKeys;
+        private static readonly string[] GrandViews={"castle approach","barracks","village street",
+            "river and bridge","castle courtyard","river panorama"};
+        private static readonly string[] GrandKeys={"castle","barracks","street","river",
+            "courtyard","panorama"};
+        private string[] Views=>grandVillage ? GrandViews : villageCastle ? VillageViews : ReferenceViews;
+        private string[] ViewKeys=>grandVillage ? GrandKeys : villageCastle ? VillageKeys : ReferenceKeys;
         [SerializeField] private Camera sceneCamera;
         [SerializeField] private bool villageCastle;
+        [SerializeField] private bool grandVillage;
         [SerializeField] private Material stone,brick,wood,plaster,roof,road,terrain,glass;
         [SerializeField] private Texture2D dryAlbedo,dryNormal,dryMask,groundAlbedo,groundNormal,groundMask;
         [SerializeField] private GameObject grass,rock,pot,shrub;
+        [SerializeField] private GameObject coastalTree,pine;
+        [SerializeField] private Material riverWater;
         private ConstructionWorld world;
         private ConstructionCommandHistory history;
         private PvtChunkVisualEngine engine;
         private PvtFreeReferenceEnvironment environment;
+        private PvtGrandVillageEnvironment grandEnvironment;
         private GameObject visualRoot;
         private PieceId selected;
         private bool hasSelection,hideUi;
         private int viewIndex;
         private string message="Click an architectural piece to select it.";
         private string SavePath=>Path.Combine(Application.persistentDataPath,
+            grandVillage ? "aedifica_grand_river_village.pvt2" :
             villageCastle ? "aedifica_castle_village.pvt2" : "aedifica_free_reference.pvt2");
         public ConstructionWorld World=>world;
         public PvtChunkVisualEngine VisualEngine=>engine;
@@ -50,6 +59,14 @@ namespace Aedifica.Rendering
             villageCastle=castleVillage;
         }
 
+        public void ConfigureGrand(GameObject treePrefab,GameObject pinePrefab,Material waterMaterial)
+        {
+            if (treePrefab==null || pinePrefab==null || waterMaterial==null)
+                throw new ArgumentException("Grand village requires coastal tree, pine and water assets.");
+            coastalTree=treePrefab;pine=pinePrefab;riverWater=waterMaterial;
+            grandVillage=true;villageCastle=false;
+        }
+
         private void Start()
         {
             if (sceneCamera==null || stone==null || brick==null || wood==null || plaster==null ||
@@ -57,17 +74,25 @@ namespace Aedifica.Rendering
                 dryNormal==null || dryMask==null || groundAlbedo==null || groundNormal==null ||
                 groundMask==null || grass==null || rock==null || pot==null || shrub==null)
             { Debug.LogError("Free asset reference scene has missing serialized dependencies.",this);enabled=false;return; }
+            if (grandVillage && (coastalTree==null || pine==null || riverWater==null))
+            { Debug.LogError("Grand village has missing coastal tree, pine or water.",this);enabled=false;return; }
             var registry=new MaterialRegistry(stone,stone,brick,plaster);
             registry.Register(PvtFinalScenario.Wood,wood);
             registry.Register(PvtFinalScenario.Ceramic,roof);
             registry.Register(PvtVisualCityScenario.Glass,glass);
-            environment=new PvtFreeReferenceEnvironment(transform,terrain,road,stone,
-                dryAlbedo,dryNormal,dryMask,groundAlbedo,groundNormal,groundMask,
-                grass,rock,pot,shrub,villageCastle);
-            BuildWorld(villageCastle ? PvtMedievalVillageScenario.Build()
+            if (grandVillage)
+                grandEnvironment=new PvtGrandVillageEnvironment(transform,terrain,road,riverWater,
+                    dryAlbedo,dryNormal,dryMask,groundAlbedo,groundNormal,groundMask,
+                    coastalTree,pine,shrub,rock);
+            else
+                environment=new PvtFreeReferenceEnvironment(transform,terrain,road,stone,
+                    dryAlbedo,dryNormal,dryMask,groundAlbedo,groundNormal,groundMask,
+                    grass,rock,pot,shrub,villageCastle);
+            BuildWorld(grandVillage ? PvtGrandVillageScenario.Build() :
+                villageCastle ? PvtMedievalVillageScenario.Build()
                 : PvtVisualCityScenario.BuildReferenceResidence(),registry);
             PositionCamera(0);
-            Debug.Log($"{(villageCastle ? "Castle village" : "Free asset reference")} ready: " +
+            Debug.Log($"{(grandVillage ? "Grand river castle village" : villageCastle ? "Castle village" : "Free asset reference")} ready: " +
                 $"{world.Count} individually editable pieces; art awaits human review.",this);
         }
 
@@ -93,7 +118,7 @@ namespace Aedifica.Rendering
             GUILayout.BeginHorizontal();
             for (int i=0;i<Views.Length;i++)
             { int index=i;if (GUILayout.Button(Views[i])) PositionCamera(index); }
-            if (GUILayout.Button(villageCastle ? "Capture 5 views" : "Capture 4 views"))
+            if (GUILayout.Button("Capture "+Views.Length+" views"))
                 StartCoroutine(CaptureViews());
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
@@ -184,7 +209,8 @@ namespace Aedifica.Rendering
         private void AddBlock()
         {
             Vector3 p=sceneCamera.transform.position+sceneCamera.transform.forward*8f;
-            p.y=Pvt2Scenario.GroundHeight(p.x,p.z);
+            p.y=grandVillage ? PvtGrandVillageEnvironment.Height(p.x,p.z) :
+                Pvt2Scenario.GroundHeight(p.x,p.z);
             var piece=new PieceData(PieceId.Parse(Guid.NewGuid().ToString("N")),
                 new PieceTransform(p,Quaternion.identity),new BlockDimensions(1f,1f,1f))
                 .WithMaterial(LabMaterialIds.Stone);
@@ -216,6 +242,7 @@ namespace Aedifica.Rendering
         private void PositionCamera(int index)
         {
             viewIndex=index;
+            if (grandVillage) { PositionGrandCamera(index);return; }
             if (villageCastle) { PositionVillageCamera(index);return; }
             float ground=Pvt2Scenario.GroundHeight(0f,0f);
             Vector3 position,target;
@@ -255,6 +282,28 @@ namespace Aedifica.Rendering
             message="View: "+Views[index]+" ("+(index+1)+"/"+Views.Length+")";
         }
 
+        private void PositionGrandCamera(int index)
+        {
+            Vector3 position,target;
+            switch (index)
+            {
+                case 0: position=new Vector3(-20f,9f,-14f);
+                    target=new Vector3(-22f,19f,15f);break;
+                case 1: position=new Vector3(-76f,6f,-29f);
+                    target=new Vector3(-60f,5f,-6f);break;
+                case 2: position=new Vector3(-60f,7f,-68f);
+                    target=new Vector3(-28f,4f,-37f);break;
+                case 3: position=new Vector3(32f,6f,-29f);
+                    target=new Vector3(47f,1f,-18f);break;
+                case 4: position=new Vector3(-3f,19f,31f);
+                    target=new Vector3(-22f,18f,43f);break;
+                default: position=new Vector3(70f,65f,-77f);
+                    target=new Vector3(-19f,10f,13f);break;
+            }
+            sceneCamera.transform.position=position;sceneCamera.transform.LookAt(target);
+            message="View: "+Views[index]+" ("+(index+1)+"/"+Views.Length+")";
+        }
+
         private IEnumerator CaptureViews()
         {
             hideUi=true;int previous=viewIndex;
@@ -263,7 +312,8 @@ namespace Aedifica.Rendering
             {
                 PositionCamera(i);yield return null;yield return new WaitForEndOfFrame();
                 string path=Path.Combine(Application.persistentDataPath,
-                    (villageCastle ? "aedifica_castle_village_" : "aedifica_free_reference_")+
+                    (grandVillage ? "aedifica_grand_river_" :
+                    villageCastle ? "aedifica_castle_village_" : "aedifica_free_reference_")+
                     stamp+"_"+ViewKeys[i]+".png");
                 Texture2D screenshot=ScreenCapture.CaptureScreenshotAsTexture();
                 File.WriteAllBytes(path,screenshot.EncodeToPNG());Destroy(screenshot);
@@ -272,6 +322,7 @@ namespace Aedifica.Rendering
             message=Views.Length+" captures saved in "+Application.persistentDataPath;
         }
         private void OnDestroy()
-        { if (engine!=null) engine.Dispose();if (environment!=null) environment.Dispose(); }
+        { if (engine!=null) engine.Dispose();if (environment!=null) environment.Dispose();
+            if (grandEnvironment!=null) grandEnvironment.Dispose(); }
     }
 }

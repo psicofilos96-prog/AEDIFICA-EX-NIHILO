@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 248dc3d88e73481b89aef4cfe62fe9fa
+ModelImporter:
+  serializedVersion: 22200
+  externalObjects: {}
+  materials:
+    materialImportMode: 1
+  animations:
+    importAnimation: 0
+  meshes:
+    globalScale: 1
+    useFileScale: 1
+    importBlendShapes: 0
+  userData:
+  assetBundleName:
+  assetBundleVariant:
